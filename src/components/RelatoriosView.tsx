@@ -83,32 +83,6 @@ export default function RelatoriosView({
   initialSelectedInspectionId
 }: RelatoriosViewProps) {
   const [selectedId, setSelectedId] = useState<string>("");
-  const [signatureBase64, setSignatureBase64] = useState<string>("");
-
-  useEffect(() => {
-    // Pre-load and convert the signature to base64 on mount to ensure it's always ready
-    const loadSignature = async () => {
-      try {
-        const url = `${window.location.origin}/assets/assinatura-jhonata.png`;
-        const res = await fetch(url);
-        const blob = await res.blob();
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-        setSignatureBase64(base64);
-      } catch (err) {
-        console.error("Erro ao converter assinatura para base64:", err);
-      }
-    };
-    loadSignature();
-  }, []);
-
-  const assinaturaUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/assets/assinatura-jhonata.png`
-    : "/assets/assinatura-jhonata.png";
 
   // Filters state
   const [selectedSupervisor, setSelectedSupervisor] = useState<string>("");
@@ -543,7 +517,7 @@ export default function RelatoriosView({
     }
   };
 
-  const handlePrint = async () => {
+  const handlePrint = () => {
     if (!selectedInspection) {
       alert("Selecione uma inspeção para gerar o relatório.");
       return;
@@ -553,72 +527,16 @@ export default function RelatoriosView({
       alert("A área do relatório não foi encontrada.");
       return;
     }
-
-    // Ensure we have a data/absolute URL for the signature
-    let activeSignatureUrl = signatureBase64;
-    if (!activeSignatureUrl) {
-      try {
-        const url = `${window.location.origin}/assets/assinatura-jhonata.png`;
-        const res = await fetch(url);
-        const blob = await res.blob();
-        activeSignatureUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      } catch (err) {
-        console.error("Erro ao converter assinatura sob demanda:", err);
-        activeSignatureUrl = `${window.location.origin}/assets/assinatura-jhonata.png`;
-      }
-    }
-
-    // Pre-wait for images in main element
-    const images = Array.from(element.querySelectorAll("img"));
-    await Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise<void>(resolve => {
-      img.onload = () => resolve(); 
-      img.onerror = () => resolve();
-    })));
-
     const printWindow = window.open("", "_blank", "width=1000,height=800");
     if (!printWindow) {
       alert("Permita pop-ups para abrir a impressão do relatório.");
       return;
     }
-
-    // Clone the element to safely modify img sources before writing to printWindow
-    const clone = element.cloneNode(true) as HTMLElement;
-    const cloneSignatureImg = clone.querySelector(".signature-img") as HTMLImageElement | null;
-    if (cloneSignatureImg) {
-      cloneSignatureImg.src = activeSignatureUrl;
-    }
-
     const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).map(node => node.outerHTML).join("\n");
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Relatório GEMBA ${selectedInspection.id}</title>${styles}<style>@page{size:A4;margin:10mm}body{background:white!important;margin:0}.no-print{display:none!important}#printable-report-document{box-shadow:none!important;border:0!important;width:100%!important;max-width:none!important}img:not([src]), img[src=""]{opacity:0!important;visibility:hidden!important}</style></head><body>${clone.outerHTML}</body></html>`);
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Relatório GEMBA ${selectedInspection.id}</title>${styles}<style>@page{size:A4;margin:10mm}body{background:white!important;margin:0}.no-print{display:none!important}#printable-report-document{box-shadow:none!important;border:0!important;width:100%!important;max-width:none!important}</style></head><body>${element.outerHTML}</body></html>`);
     printWindow.document.close();
-
-    // Find images inside print window
-    const printWindowImages = Array.from(printWindow.document.querySelectorAll("img"));
-
-    // Wait for all print window images to finish loading completely
-    await Promise.all(printWindowImages.map(img => {
-      if (img.complete && img.naturalWidth > 0) {
-        return Promise.resolve();
-      }
-      return new Promise<void>((resolve) => {
-        img.onload = () => resolve();
-        img.onerror = () => {
-          img.style.opacity = "0";
-          img.style.visibility = "hidden";
-          resolve();
-        };
-      });
-    }));
-
-    // Focus and print only when all elements are fully loaded
     printWindow.focus();
-    printWindow.print();
-    printWindow.close();
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
   };
 
   return (
@@ -1146,11 +1064,10 @@ export default function RelatoriosView({
                             <div className="flex flex-col items-center justify-center space-y-1">
                               <div className="signature-img-container mx-auto w-[190px] h-[75px] flex items-center justify-center relative select-none">
                                 <img 
-                                  src={assinaturaUrl} 
+                                  src="/assets/assinatura-jhonata.png" 
                                   alt="Assinatura Jhonata Santos" 
                                   className="signature-img max-w-[190px] max-h-[75px] w-auto h-auto object-contain" 
                                   referrerPolicy="no-referrer"
-                                  onError={(e) => { e.currentTarget.style.opacity = "0"; }}
                                 />
                               </div>
                               {/* Horizontal line with 240px width */}
