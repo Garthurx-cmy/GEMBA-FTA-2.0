@@ -140,18 +140,18 @@ export default function LancarInspecaoView({
   // Load editing inspection data if provided
   useEffect(() => {
     if (editingInspection) {
-      setData(editingInspection.data);
-      setSupervisorId(editingInspection.supervisorId);
-      setAreaId(editingInspection.areaId);
-      setContratoId(editingInspection.contratoId);
-      setAtividade(editingInspection.atividade);
-      setTipo(editingInspection.tipo);
-      setPotencial(editingInspection.potencial);
-      setDescricao(editingInspection.descricao);
-      setAcaoCorretiva(editingInspection.acaoCorretiva);
-      setResponsavel(editingInspection.responsavel);
-      setPrazo(editingInspection.prazo);
-      setStatus(editingInspection.status);
+      setData(editingInspection.data || "");
+      setSupervisorId(editingInspection.supervisorId || "");
+      setAreaId(editingInspection.areaId || "");
+      setContratoId(editingInspection.contratoId || "");
+      setAtividade(editingInspection.atividade || "");
+      setTipo(editingInspection.tipo || "");
+      setPotencial(editingInspection.potencial || "LEVE" as any);
+      setDescricao(editingInspection.descricao || "");
+      setAcaoCorretiva(editingInspection.acaoCorretiva || "");
+      setResponsavel(editingInspection.responsavel || "");
+      setPrazo(editingInspection.prazo || "");
+      setStatus(editingInspection.status || "ABERTO" as any);
       setObservacoes(editingInspection.observacoes || "");
       setFotosAntes(editingInspection.fotosAntes || []);
       setFotosDepois(editingInspection.fotosDepois || []);

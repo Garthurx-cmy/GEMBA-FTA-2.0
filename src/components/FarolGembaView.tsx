@@ -77,13 +77,28 @@ export default function FarolGembaView({
 
         // Individual type counts
         const lvcc = ownInsps.filter((i) => getTipoLancamento(i.atividade, i.tipo) === "LVCC").length;
-        const dial = ownInsps.filter((i) => getTipoLancamento(i.atividade, i.tipo) === "DIAL / Desvio Comportamental").length;
+        const dial = ownInsps.filter((i) => {
+          const act = (i.atividade || "").toLowerCase();
+          const tp = (i.tipo || "").toLowerCase();
+          return act.includes("dial") || tp.includes("dial");
+        }).length;
         const dss = ownInsps.filter((i) => getTipoLancamento(i.atividade, i.tipo) === "DSS").length;
         const estrutural = ownInsps.filter((i) => getTipoLancamento(i.atividade, i.tipo) === "Desvio Estrutural").length;
         const directPresenca = ownInsps.filter((i) => getTipoLancamento(i.atividade, i.tipo) === "Presença em Campo").length;
 
-        // Presenca em campo column includes dial + estrutural + direct
-        const presencaEmCampo = dial + estrutural + directPresenca;
+        const comportamental = ownInsps.filter((i) => {
+          const act = (i.atividade || "").toLowerCase();
+          const tp = (i.tipo || "").toLowerCase();
+          const launchType = getTipoLancamento(i.atividade, i.tipo);
+          return act.includes("desvio comportamental") || tp.includes("desvio comportamental") ||
+            (launchType === "DIAL / Desvio Comportamental" && !act.includes("dial") && !tp.includes("dial"));
+        }).length;
+
+        const notificacao = ownInsps.filter((i) => getTipoLancamento(i.atividade, i.tipo) === "Notificação").length;
+        const interdicao = ownInsps.filter((i) => getTipoLancamento(i.atividade, i.tipo) === "Interdição").length;
+
+        // Presenca em campo column includes dial + comportamental + estrutural + direct
+        const presencaEmCampo = dial + comportamental + estrutural + directPresenca;
 
         // Total registered inspections
         const totalInspecoes = ownInsps.length;
@@ -94,8 +109,8 @@ export default function FarolGembaView({
         // Percentual calculation
         const percentual = metaMensal > 0 ? (totalInspecoes / metaMensal) * 100 : 0;
 
-        // Pontuacao calculation: total real inspections + dial derived + structural derived
-        const pontuacao = totalInspecoes + dial + estrutural;
+        // Pontuacao calculation: total real inspections + dial derived + comportamental derived + structural derived
+        const pontuacao = totalInspecoes + dial + comportamental + estrutural;
 
         // Last timestamp for sorting tie-breaker
         const lastTimestamp = ownInsps.reduce((latest, i) => {
@@ -112,6 +127,9 @@ export default function FarolGembaView({
           dss,
           presencaEmCampo,
           estrutural,
+          comportamental,
+          notificacao,
+          interdicao,
           totalInspecoes,
           percentual,
           pontuacao,
@@ -176,6 +194,9 @@ export default function FarolGembaView({
               <th className="py-3.5 px-3 text-center">DSS</th>
               <th className="py-3.5 px-3 text-center">Presença em Campo</th>
               <th className="py-3.5 px-3 text-center">Desvio Estrutural</th>
+              <th className="py-3.5 px-3 text-center">Desvio Comportamental</th>
+              <th className="py-3.5 px-3 text-center">Notificação</th>
+              <th className="py-3.5 px-3 text-center">Interdição</th>
               <th className="py-3.5 px-3 text-center bg-blue-950">Total de Inspeções</th>
               <th className="py-3.5 px-3 text-center">Percentual</th>
               <th className="py-3.5 px-4 text-center">Pontuação</th>
@@ -224,6 +245,15 @@ export default function FarolGembaView({
                   
                   {/* Desvio Estrutural */}
                   <td className="py-3.5 px-3 text-center font-bold text-slate-600">{row.estrutural}</td>
+
+                  {/* Desvio Comportamental */}
+                  <td className="py-3.5 px-3 text-center font-bold text-slate-600">{row.comportamental}</td>
+
+                  {/* Notificação */}
+                  <td className="py-3.5 px-3 text-center font-bold text-slate-600">{row.notificacao}</td>
+
+                  {/* Interdição */}
+                  <td className="py-3.5 px-3 text-center font-bold text-slate-600">{row.interdicao}</td>
                   
                   {/* Total de Inspeções */}
                   <td className="py-3.5 px-3 text-center font-black text-[#0B2E59] bg-blue-50/30">{row.totalInspecoes}</td>
@@ -246,7 +276,7 @@ export default function FarolGembaView({
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-8 text-center text-gray-400 font-bold">
+                <td colSpan={13} className="py-8 text-center text-gray-400 font-bold">
                   Nenhum supervisor cadastrado ou ativo.
                 </td>
               </tr>

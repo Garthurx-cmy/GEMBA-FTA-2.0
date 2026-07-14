@@ -88,6 +88,19 @@ export default function ConfiguracoesView({
     };
   }, []);
 
+  // Sync state values with incoming config prop changes
+  React.useEffect(() => {
+    if (config) {
+      setNomeEmpresa(config.nomeEmpresa || "");
+      setNomeSistema(config.nomeSistema || "");
+      setLogoUrl(config.logoUrl || "");
+      setResponsavelNome(config.responsavelAssinaturaNome || "");
+      setResponsavelCargo(config.responsavelAssinaturaCargo || "");
+      if (config.tiposInspecao) setTiposInspecao(config.tiposInspecao);
+      if (config.processosChecklist) setProcessosChecklist(config.processosChecklist);
+    }
+  }, [config]);
+
   // --- EDIT MODAL STATES ---
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<{
@@ -97,9 +110,9 @@ export default function ConfiguracoesView({
   } | null>(null);
 
   // --- IDENTIDADE STATES ---
-  const [nomeEmpresa, setNomeEmpresa] = useState(config.nomeEmpresa);
-  const [nomeSistema, setNomeSistema] = useState(config.nomeSistema);
-  const [logoUrl, setLogoUrl] = useState(config.logoUrl);
+  const [nomeEmpresa, setNomeEmpresa] = useState(config.nomeEmpresa || "");
+  const [nomeSistema, setNomeSistema] = useState(config.nomeSistema || "");
+  const [logoUrl, setLogoUrl] = useState(config.logoUrl || "");
 
   // --- SIGNATURE STATES ---
   const [responsavelNome, setResponsavelNome] = useState(config.responsavelAssinaturaNome || "Jhonata Santos");
