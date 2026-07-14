@@ -17,12 +17,12 @@ body {
   /* Set A4 margins to avoid standard browser headers and reserve breathing space */
   @page {
     size: A4 portrait;
-    margin: 1.6cm 1.4cm 1.4cm 1.4cm;
+    margin: 7mm;
   }
 
   body {
     background-color: #ffffff !important;
-    font-size: 11pt !important;
+    font-size: 9px !important;
     color: #1e293b !important;
   }
   
@@ -44,14 +44,15 @@ body {
     padding: 0 !important;
     margin: 0 !important;
     display: block !important;
+    min-height: 0 !important;
   }
 
-  /* Keep table repeat headers and footers intact on page breaks */
+  /* Keep table repeat headers intact on page breaks, hide fixed footer to prevent blank pages */
   thead {
     display: table-header-group !important;
   }
   tfoot {
-    display: table-footer-group !important;
+    display: none !important;
   }
   tr {
     page-break-inside: avoid !important;
@@ -69,6 +70,187 @@ body {
   .print-page-num::after {
     counter-increment: page;
     content: counter(page);
+  }
+}
+
+/* Compact rules for both Print and PDF generation */
+@media print, .pdf-mode {
+  #printable-report-document {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-size: 9px !important;
+    line-height: 1.25 !important;
+    min-height: 0 !important;
+  }
+
+  /* Font scaling */
+  #printable-report-document p,
+  #printable-report-document span,
+  #printable-report-document div,
+  #printable-report-document td {
+    font-size: 9.5px !important;
+    line-height: 1.25 !important;
+  }
+
+  #printable-report-document h2 {
+    font-size: 11px !important;
+  }
+
+  /* Title headers */
+  #printable-report-document .text-sm {
+    font-size: 11px !important;
+  }
+  #printable-report-document .text-[9px] {
+    font-size: 7.5px !important;
+  }
+  #printable-report-document .text-xs {
+    font-size: 9px !important;
+  }
+
+  /* Compact spacing overrides */
+  #printable-report-document .space-y-5 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.5rem !important;
+  }
+  #printable-report-document .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.4rem !important;
+  }
+  #printable-report-document .space-y-1 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.1rem !important;
+  }
+  #printable-report-document .pb-5 {
+    padding-bottom: 0.4rem !important;
+  }
+  #printable-report-document .mb-5 {
+    margin-bottom: 0.4rem !important;
+  }
+  #printable-report-document .pb-4 {
+    padding-bottom: 0.25rem !important;
+  }
+  #printable-report-document .mb-6 {
+    margin-bottom: 0.4rem !important;
+  }
+  #printable-report-document .pt-10 {
+    padding-top: 0.4rem !important;
+  }
+  #printable-report-document .pb-\[30px\] {
+    padding-bottom: 0.2rem !important;
+  }
+  #printable-report-document .mt-6 {
+    margin-top: 0.4rem !important;
+  }
+  #printable-report-document .pt-6 {
+    padding-top: 0.4rem !important;
+  }
+  #printable-report-document .p-3.5 {
+    padding: 0.5rem !important;
+  }
+  #printable-report-document .p-2.5 {
+    padding: 0.4rem !important;
+  }
+  #printable-report-document .px-3.5 {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+  #printable-report-document .py-2.5 {
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+  }
+
+  /* 4 Column metadata grid for print/PDF */
+  #printable-report-document .metadata-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 0.4rem !important;
+  }
+
+  /* 2 Column photo layout */
+  #printable-report-document .photo-container-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.4rem !important;
+    margin-top: 0.4rem !important;
+    padding-top: 0.4rem !important;
+  }
+
+  /* Photo Grid Block */
+  #printable-report-document .photo-grid-block {
+    margin-top: 0.2rem !important;
+    margin-bottom: 0.2rem !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  
+  /* Photo Grid Title */
+  #printable-report-document .photo-grid-title {
+    font-size: 8px !important;
+    padding-bottom: 0.15rem !important;
+    margin-bottom: 0.15rem !important;
+  }
+
+  /* Photo Card Container */
+  #printable-report-document .photo-card-container {
+    width: 100% !important;
+    max-width: 170px !important;
+    height: 125px !important;
+    margin: 0 auto !important;
+    aspect-ratio: auto !important;
+    padding: 2px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background-color: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 6px !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Photo Img */
+  #printable-report-document .photo-img {
+    max-width: 170px !important;
+    max-height: 125px !important;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain !important;
+  }
+
+  /* Signature section spacing */
+  #printable-report-document .signature-section {
+    margin-top: 0.4rem !important;
+    padding-top: 0.4rem !important;
+    padding-bottom: 0.2rem !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  
+  #printable-report-document .signature-img-container {
+    width: 170px !important;
+    height: 55px !important;
+  }
+
+  #printable-report-document .signature-img {
+    max-width: 170px !important;
+    max-height: 55px !important;
+  }
+
+  #printable-report-document .signature-line {
+    width: 240px !important;
+    margin: 4px auto !important;
+  }
+
+  #printable-report-document .signature-name {
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+  }
+
+  #printable-report-document .signature-role,
+  #printable-report-document .signature-company {
+    font-size: 8px !important;
+    line-height: 1.2 !important;
   }
 }
 

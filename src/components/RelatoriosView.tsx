@@ -25,8 +25,8 @@ function PhotoGrid({ title, photos, isBefore }: { title: string; photos: string[
 
   if (count === 0) {
     return (
-      <div className="space-y-2 flex-1 break-inside-avoid page-break-inside-avoid">
-        <span className={`block text-[10px] font-bold uppercase tracking-widest text-center border-b pb-1 ${
+      <div className="space-y-2 flex-1 break-inside-avoid page-break-inside-avoid photo-grid-block">
+        <span className={`block text-[10px] font-bold uppercase tracking-widest text-center border-b pb-1 photo-grid-title ${
           isBefore ? "text-red-600 border-red-50" : "text-green-700 border-green-50"
         }`}>
           {title}
@@ -49,8 +49,8 @@ function PhotoGrid({ title, photos, isBefore }: { title: string; photos: string[
   }
 
   return (
-    <div className="space-y-2 flex-1 break-inside-avoid page-break-inside-avoid">
-      <span className={`block text-[10px] font-bold uppercase tracking-widest text-center border-b pb-1 ${
+    <div className="space-y-2 flex-1 break-inside-avoid page-break-inside-avoid photo-grid-block">
+      <span className={`block text-[10px] font-bold uppercase tracking-widest text-center border-b pb-1 photo-grid-title ${
         isBefore ? "text-red-600 border-red-50" : "text-green-700 border-green-50"
       }`}>
         {title} ({count})
@@ -58,12 +58,12 @@ function PhotoGrid({ title, photos, isBefore }: { title: string; photos: string[
       <div className={gridClass}>
         {photos.map((img, idx) => {
           return (
-            <div key={idx} className="relative aspect-video rounded-lg border border-gray-200 bg-slate-50 flex items-center justify-center overflow-hidden shadow-2xs hover:shadow-xs transition-shadow">
+            <div key={idx} className="relative aspect-video rounded-lg border border-gray-200 bg-slate-50 flex items-center justify-center overflow-hidden shadow-2xs hover:shadow-xs transition-shadow photo-card-container">
               {/* object-contain ensures images are never cropped, showing full structural details */}
               <img
                 src={img}
                 alt={`${title} ${idx + 1}`}
-                className="w-full h-full object-contain max-h-[180px] select-none"
+                className="w-full h-full object-contain max-h-[180px] select-none photo-img"
                 referrerPolicy="no-referrer"
               />
             </div>
@@ -399,6 +399,42 @@ export default function RelatoriosView({
         windowWidth: element.clientWidth,
         windowHeight: element.clientHeight,
         onclone: (clonedDoc) => {
+          // 0. Monkeypatch getComputedStyle of the cloned window to convert oklch/oklab to rgb
+          const clonedWin = clonedDoc.defaultView;
+          if (clonedWin) {
+            const originalGetComputedStyle = clonedWin.getComputedStyle;
+            clonedWin.getComputedStyle = function (el: Element, pseudoElt?: string | null) {
+              const style = originalGetComputedStyle.call(clonedWin, el, pseudoElt);
+              return new Proxy(style, {
+                get(target: any, prop: any) {
+                  if (prop === "getPropertyValue") {
+                    return (propertyName: string) => {
+                      const val = target.getPropertyValue(propertyName);
+                      if (typeof val === "string" && (val.includes("oklch") || val.includes("oklab"))) {
+                        return replaceColors(val);
+                      }
+                      return val;
+                    };
+                  }
+                  const val = target[prop];
+                  if (typeof val === "string" && (val.includes("oklch") || val.includes("oklab"))) {
+                    return replaceColors(val);
+                  }
+                  if (typeof val === "function") {
+                    return val.bind(target);
+                  }
+                  return val;
+                }
+              }) as any;
+            };
+          }
+
+          // Add pdf-mode class to the root printable element inside the clone to trigger compact print styling
+          const clonedElement = clonedDoc.getElementById("printable-report-document");
+          if (clonedElement) {
+            clonedElement.classList.add("pdf-mode");
+          }
+
           // 1. Process style attribute of all elements
           const allElements = clonedDoc.querySelectorAll("*");
           allElements.forEach((el) => {
@@ -863,7 +899,7 @@ export default function RelatoriosView({
                       {/* MAIN REPORT BODY */}
                       <div className="space-y-5 text-xs text-gray-700">
                         {/* CORE METADATA GRID */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-y-4 gap-x-2 border-b border-gray-100 pb-5 mb-5">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-y-4 gap-x-2 border-b border-gray-100 pb-5 mb-5 metadata-grid">
                           <div className="p-1">
                             <span className="block text-[9px] uppercase font-bold text-gray-400 tracking-wider">Supervisor</span>
                             <span className="font-extrabold text-gray-900">{getSupervisorName(selectedInspection.supervisorId)}</span>
@@ -1007,13 +1043,14 @@ export default function RelatoriosView({
                                       {selectedInspection.observacoes}
                                     </p>
                                   </div>
-                                )}
-                              </div>
-                            </>
-                          )}
+                                 )}
+                               </div>
+                             </>
+                           )}
+                         </div>
 
                         {/* PHOTO GRID WITH AUTOMATIC ORGANIZER (Avois slicing over page-breaks) */}
-                        <div className={`grid gap-5 pt-4 border-t border-gray-100 break-inside-avoid page-break-inside-avoid ${(isDSS || isPresenca) ? "grid-cols-1 max-w-xl mx-auto" : "grid-cols-1 md:grid-cols-2"}`}>
+                        <div className={`grid gap-5 pt-4 border-t border-gray-100 break-inside-avoid page-break-inside-avoid photo-container-grid ${(isDSS || isPresenca) ? "grid-cols-1 max-w-xl mx-auto" : "grid-cols-1 md:grid-cols-2"}`}>
                           {isPresenca ? (
                             <PhotoGrid title="Fotos da Presença em Campo" photos={selectedInspection.fotosAntes || []} isBefore={false} />
                           ) : isDSS ? (
@@ -1027,50 +1064,33 @@ export default function RelatoriosView({
                         </div>
 
                           {/* SIGNATURES & APPROVAL SECTION */}
-                          <div className="grid grid-cols-2 gap-8 pt-10 border-t border-gray-100 text-center text-xs text-gray-500 break-inside-avoid page-break-inside-avoid">
-                            <div className="space-y-1.5 flex flex-col justify-end">
-                              <div className="mx-auto w-48 border-b border-gray-300 h-14 flex items-center justify-center">
-                                <span className="text-[9px] text-gray-400 font-medium italic">Assinado Eletronicamente</span>
+                          <div className="signature-section flex flex-col items-center justify-center pt-6 pb-4 border-t border-gray-100 text-center text-xs text-gray-500 break-inside-avoid page-break-inside-avoid">
+                            <div className="flex flex-col items-center justify-center space-y-1">
+                              <div className="signature-img-container mx-auto w-[170px] h-[75px] flex items-center justify-center relative select-none">
+                                <img 
+                                  src="/assets/assinatura-jhonata.png" 
+                                  alt="Assinatura Jhonata Santos" 
+                                  className="signature-img max-w-[170px] max-h-[75px] w-auto h-auto object-contain" 
+                                  referrerPolicy="no-referrer"
+                                />
                               </div>
-                              <span className="block font-bold text-gray-800">
-                                {getSupervisorName(selectedInspection.supervisorId)}
-                              </span>
-                              <span className="text-[10px] font-semibold block text-gray-500">
-                                Supervisor Auditante
-                              </span>
-                              <span className="text-[9px] font-bold block text-gray-400">
-                                {config.nomeEmpresa}
-                              </span>
-                            </div>
-                            
-                            {/* Executive Manager Jhonata Santos Approval Block with custom vector signature */}
-                            <div className="space-y-1.5 flex flex-col justify-end">
-                              <div className="mx-auto w-48 h-14 flex items-center justify-center relative border-b border-gray-300">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 80" width="100%" height="100%" fill="none" stroke="#0E1B2A" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" className="absolute bottom-1.5 w-44 h-12 select-none opacity-95">
-                                  {/* High-fidelity cursive representation of 'Jhonata' */}
-                                  <path d="M 22 45 C 30 30, 48 22, 60 22 C 72 22, 75 28, 62 35 C 48 42, 32 48, 38 54 C 44 58, 60 54, 70 42 C 78 30, 82 12, 88 15 C 94 18, 94 38, 100 42 C 106 46, 114 40, 118 38 C 122 36, 130 30, 133 38 C 135 44, 140 42, 146 35" />
-                                  <path d="M 112 26 Q 124 24 134 26" strokeWidth="2.0" />
-                                  
-                                  {/* Capital 'S' matching the distinctive loop pattern */}
-                                  <path d="M 160 48 C 155 52, 160 56, 168 52 C 180 44, 198 20, 214 20 C 224 20, 230 28, 220 38 C 208 46, 188 54, 174 52 C 166 50, 164 42, 172 38 Q 186 34, 204 36" />
-                                </svg>
-                              </div>
-                              <span className="block font-extrabold text-slate-800 text-[11px]">
+                              {/* Horizontal line with 240px width */}
+                              <div className="signature-line w-[240px] border-t border-gray-300 my-1 mx-auto"></div>
+                              <span className="signature-name block font-bold text-[#0B2E59] text-[14px]">
                                 Jhonata Santos
                               </span>
-                              <span className="text-[9px] font-bold block text-slate-500 uppercase tracking-wide">
-                                Gerente Operacional dos Contratos
+                              <span className="signature-role text-[10px] font-bold block text-slate-700 uppercase tracking-wide">
+                                GERENTE OPERACIONAL DOS CONTRATOS
                               </span>
-                              <span className="text-[9px] font-extrabold block text-slate-400 uppercase tracking-widest">
-                                {config.nomeEmpresa}
+                              <span className="signature-company text-[10px] font-bold block text-slate-500 uppercase tracking-wider">
+                                FTA SERVIÇOS INDUSTRIAIS
                               </span>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
+                      </td>
+                    </tr>
+                  </tbody>
 
                 {/* 3. REPEATING FIXED FOOTER ON PRINT */}
                 <tfoot className="hidden print:table-footer-group">
@@ -1091,8 +1111,8 @@ export default function RelatoriosView({
                 </tfoot>
               </table>
 
-              {/* SCREEN-ONLY FOOTER SECTION */}
-              <div className="print:hidden text-center text-[10px] text-gray-400 pt-6 mt-6 border-t border-gray-100 flex items-center justify-between font-semibold select-none">
+              {/* FOOTER SECTION */}
+              <div className="text-center text-[10px] text-gray-400 pt-6 mt-6 border-t border-gray-100 flex items-center justify-between font-semibold select-none print:mt-4 print:pt-4">
                 <div className="flex flex-col gap-0.5 text-left">
                   <span>Relatório Gerado Eletronicamente pelo GEMBA FTA</span>
                   <span>Emitente: <span className="text-gray-500 font-extrabold">Arthur Santos</span> | Gerado em: <span className="text-gray-500 font-extrabold">{reportGenerationTime}</span></span>
