@@ -694,11 +694,20 @@ export default function App() {
         </main>
 
         {/* HIGH-DENSITY SYSTEM FOOTER */}
-        <footer className="h-8 bg-[#0B2E59] flex items-center px-6 justify-between shrink-0 text-white text-[9px] font-bold tracking-wider border-t border-[#092241] select-none uppercase no-print">
-          <div>
+        <footer className="h-8 bg-[#0B2E59] px-6 shrink-0 text-white text-[9px] font-bold tracking-wider border-t border-[#092241] select-none uppercase no-print system-footer">
+          <div className="footer-left">
             {config.nomeEmpresa} Serviços Industriais &copy; {new Date().getFullYear()} - {config.nomeSistema}
           </div>
-          <div className="flex items-center gap-3">
+          
+          <div
+            className="footer-developer"
+            aria-label="Desenvolvido por Arthur Santos"
+          >
+            <span className="footer-developer-icon">&lt;/&gt;</span>
+            <span>Desenvolvido por Arthur Santos</span>
+          </div>
+
+          <div className="footer-right flex items-center gap-3">
             <span className="flex items-center gap-1.5 text-green-400">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
               Firebase sincronizado em tempo real

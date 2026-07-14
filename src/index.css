@@ -449,3 +449,61 @@ body {
 .animate-fade-in {
   animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* System Footer and Developer Credit Styles */
+.system-footer {
+  display: grid !important;
+  grid-template-columns: 1fr auto 1fr !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+.footer-left {
+  justify-self: start !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  min-width: 0 !important;
+}
+
+.footer-developer {
+  justify-self: center !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  color: #F8FAFC !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+}
+
+.footer-developer-icon {
+  color: #F97316 !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+
+.footer-right {
+  justify-self: end !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  min-width: 0 !important;
+}
+
+@media (max-width: 1024px) {
+  .footer-developer {
+    font-size: 10px !important;
+  }
+  .footer-developer-icon {
+    font-size: 14px !important;
+  }
+}
+
+@media print {
+  .system-footer {
+    display: none !important;
+  }
+}
+
