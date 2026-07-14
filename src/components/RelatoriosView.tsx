@@ -9,6 +9,7 @@ import { Inspection, Supervisor, Area, Contract, SystemConfig, getTipoLancamento
 import { Printer, FileText, Calendar, User, ShieldAlert, CheckCircle, Eye, RefreshCw, Download, Filter, XCircle } from "lucide-react";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
+import assinaturaJhonata from "../assets/assinatura-jhonata.png?inline";
 
 interface RelatoriosViewProps {
   inspections: Inspection[];
@@ -1064,9 +1065,9 @@ export default function RelatoriosView({
                             <div className="flex flex-col items-center justify-center space-y-1">
                               <div className="signature-img-container mx-auto w-[190px] h-[75px] flex items-center justify-center relative select-none">
                                 <img 
-                                  src="/assets/assinatura-jhonata.png" 
-                                  alt="Assinatura Jhonata Santos" 
-                                  className="signature-img max-w-[190px] max-h-[75px] w-auto h-auto object-contain" 
+                                  src={assinaturaJhonata} 
+                                  alt="" 
+                                  className="signature-img report-signature-image max-w-[190px] max-h-[75px] w-auto h-auto object-contain" 
                                   referrerPolicy="no-referrer"
                                 />
                               </div>
