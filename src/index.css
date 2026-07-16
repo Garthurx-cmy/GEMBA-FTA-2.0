@@ -451,82 +451,127 @@ body {
 }
 
 /* System Footer and Developer Credit Styles */
+
+/* 1. Base default styles for desktop / computer (above 768px) */
 .app-footer {
-  display: grid !important;
-  grid-template-columns: minmax(300px, 1fr) minmax(340px, max-content) minmax(650px, 1fr) !important;
-  align-items: center !important;
-  column-gap: 40px !important;
-  width: 100% !important;
-}
-
-.footer-left {
-  justify-self: start !important;
-  white-space: nowrap !important;
-}
-
-.footer-developer {
-  position: static !important;
-  justify-self: center !important;
-  white-space: nowrap !important;
-  margin: 0 !important;
-  transform: none !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 7px !important;
-  color: #F8FAFC !important;
-  font-size: 12px !important;
-  font-weight: 600 !important;
-}
-
-.footer-developer-icon {
-  color: #F97316 !important;
-  font-size: 16px !important;
-  font-weight: 700 !important;
-  line-height: 1 !important;
-}
-
-.footer-right {
-  position: static !important;
-  justify-self: end !important;
+  position: fixed !important;
+  left: 64px !important; /* largura real do menu lateral recolhido (w-16 = 64px) */
+  right: 0 !important;
+  bottom: 0 !important;
+  width: auto !important;
+  height: 42px !important;
+  z-index: 1000 !important;
   display: flex !important;
   align-items: center !important;
-  gap: 20px !important;
+  justify-content: center !important;
+  gap: 32px !important;
+  padding: 0 24px !important;
+  overflow: hidden !important;
   white-space: nowrap !important;
-  margin: 0 !important;
-  transform: none !important;
+  box-sizing: border-box !important;
+  background-color: #0B2E59 !important;
+  border-top: 1px solid #092241 !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+  user-select: none !important;
 }
 
-@media (min-width: 769px) and (max-width: 1500px) {
+.app-footer-company,
+.app-footer-developer,
+.app-footer-status {
+  position: static !important;
+  transform: none !important;
+  margin: 0 !important;
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.app-footer-developer {
+  justify-content: center !important;
+  gap: 10px !important;
+  color: #F8FAFC !important;
+}
+
+.developer-icon {
+  color: #F97316 !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+}
+
+.app-footer-status {
+  justify-content: center !important;
+  gap: 16px !important;
+}
+
+.firebase-status {
+  color: #4ADE80 !important; /* verde bonito e legível */
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.footer-separator {
+  color: #9CA3AF !important; /* cinza neutro */
+}
+
+.access-status {
+  color: #FB923C !important; /* laranja de destaque de acesso */
+  font-weight: 800 !important;
+}
+
+/* 4. Em telas de computador entre 769px e 1599px:
+- Ocultar somente .app-footer-company.
+- Manter desenvolvedor e status centralizados.
+- Reduzir gap geral para 24px.
+- Usar fonte entre 10px e 11px.
+- Nunca esconder “DESENVOLVIDO POR ARTHUR SANTOS”.
+*/
+@media (min-width: 769px) and (max-width: 1599px) {
   .app-footer {
-    grid-template-columns: 0px minmax(340px, max-content) minmax(450px, 1fr) !important;
-    column-gap: 20px !important;
+    gap: 24px !important;
+    font-size: 10.5px !important;
   }
-  .footer-left {
+  
+  .app-footer-company {
     display: none !important;
   }
-  .footer-developer {
-    font-size: 10px !important;
+  
+  .app-footer-developer {
+    display: flex !important;
   }
-  .footer-developer-icon {
-    font-size: 14px !important;
-  }
-  .footer-right {
-    gap: 12px !important;
+  
+  .app-footer-status {
+    display: flex !important;
   }
 }
 
+/* 5. Acima de 1600px:
+- Mostrar os três blocos.
+- Distribuir com espaço suficiente.
+- Não permitir que nenhum bloco fique atrás do menu lateral.
+*/
+@media (min-width: 1600px) {
+  .app-footer {
+    justify-content: space-between !important; /* Distribui com espaço suficiente se for tela grande */
+    padding: 0 40px !important;
+    gap: 32px !important;
+  }
+}
+
+/* 7. Manter intactas as regras móveis abaixo de 768px, adaptadas aos novos seletores */
 @media (max-width: 768px) {
-  /* 1. Fixed footer at the bottom */
-  .system-footer {
+  .app-footer {
     position: fixed !important;
     bottom: 0 !important;
-    /* 7. Position corresponding to the actual width of the collapsed sidebar (w-16, which is 64px) */
     left: 64px !important;
     width: calc(100% - 64px) !important;
     max-width: calc(100% - 64px) !important;
     z-index: 30 !important;
     
-    /* 2. One centralized column */
     display: flex !important;
     justify-content: center !important;
     align-items: center !important;
@@ -534,46 +579,52 @@ body {
     padding: 8px 6px !important;
     height: 32px !important;
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1) !important;
+    
+    background-color: #0B2E59 !important;
+    border-top: 1px solid #092241 !important;
+    color: #ffffff !important;
+    font-size: 10.5px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
+    user-select: none !important;
   }
 
-  /* 5. Hide institutional text, access data, and full Firebase text on mobile */
-  .footer-left {
+  .app-footer-company {
     display: none !important;
   }
-  .footer-right {
+  
+  .app-footer-status {
     display: none !important;
   }
 
-  /* 3. Show developer credits only */
-  .footer-developer {
+  .app-footer-developer {
     position: static !important;
     justify-self: center !important;
     white-space: nowrap !important;
-    /* 4. Font size between 10px and 11px */
     font-size: 10.5px !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     gap: 6px !important;
+    color: #F8FAFC !important;
   }
 
-  .footer-developer-icon {
+  .developer-icon {
     font-size: 13px !important;
+    color: #F97316 !important;
   }
 
-  /* 6. Keep small green ONLINE status indicator */
   .footer-mobile-status {
     display: inline-flex !important;
     font-size: 9px !important;
     font-weight: 800 !important;
   }
 
-  /* 8. Add padding-bottom to the main content container to prevent overlapping of cards */
   main {
     padding-bottom: 48px !important;
   }
 
-  /* 9. Prevent horizontal scroll globally for elements */
   html, body, #root, .flex-1 {
     max-width: 100% !important;
     overflow-x: hidden !important;
@@ -581,7 +632,7 @@ body {
 }
 
 @media print {
-  .system-footer {
+  .app-footer {
     display: none !important;
   }
 }

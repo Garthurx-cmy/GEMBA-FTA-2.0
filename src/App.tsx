@@ -695,30 +695,24 @@ export default function App() {
         </main>
 
         {/* HIGH-DENSITY SYSTEM FOOTER */}
-        <footer className="h-8 bg-[#0B2E59] px-6 shrink-0 text-white text-[9px] font-bold tracking-wider border-t border-[#092241] select-none uppercase no-print system-footer app-footer">
-          <div className="footer-left">
+        <footer className="app-footer no-print">
+          <div className="app-footer-company">
             {config.nomeEmpresa} &copy; {new Date().getFullYear()} — {config.nomeSistema}
           </div>
-          
-          <div
-            className="footer-developer"
-            aria-label="Desenvolvido por Arthur Santos"
-          >
-            <span className="footer-developer-icon">&lt;/&gt;</span>
-            <span>Desenvolvido por Arthur Santos</span>
+
+          <div className="app-footer-developer">
+            <span className="developer-icon">&lt;/&gt;</span>
+            DESENVOLVIDO POR ARTHUR SANTOS
             <span className="footer-mobile-status items-center gap-1 text-green-400 ml-1.5 hidden">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
               ONLINE
             </span>
           </div>
 
-          <div className="footer-right flex items-center gap-3">
-            <span className="flex items-center gap-1.5 text-green-400 footer-firebase-status">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-              <span className="footer-firebase-text">Firebase sincronizado em tempo real</span>
-            </span>
-            <span className="text-gray-400 footer-divider">|</span>
-            <span className="text-orange-400 font-extrabold footer-user-acesso">Acesso: {currentUser?.nome} ({currentUser?.perfil})</span>
+          <div className="app-footer-status">
+            <span className="firebase-status">● FIREBASE SINCRONIZADO EM TEMPO REAL</span>
+            <span className="footer-separator">|</span>
+            <span className="access-status">ACESSO: {currentUser?.nome || "USUÁRIO"} ({currentUser?.perfil || "PERFIL"})</span>
           </div>
         </footer>
       </div>
