@@ -696,7 +696,7 @@ export default function App() {
         {/* HIGH-DENSITY SYSTEM FOOTER */}
         <footer className="h-8 bg-[#0B2E59] px-6 shrink-0 text-white text-[9px] font-bold tracking-wider border-t border-[#092241] select-none uppercase no-print system-footer">
           <div className="footer-left">
-            {config.nomeEmpresa} Serviços Industriais &copy; {new Date().getFullYear()} - {config.nomeSistema}
+            {config.nomeEmpresa} &copy; {new Date().getFullYear()} — {config.nomeSistema}
           </div>
           
           <div
@@ -705,15 +705,19 @@ export default function App() {
           >
             <span className="footer-developer-icon">&lt;/&gt;</span>
             <span>Desenvolvido por Arthur Santos</span>
+            <span className="footer-mobile-status items-center gap-1 text-green-400 ml-1.5 hidden">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+              ONLINE
+            </span>
           </div>
 
           <div className="footer-right flex items-center gap-3">
-            <span className="flex items-center gap-1.5 text-green-400">
+            <span className="flex items-center gap-1.5 text-green-400 footer-firebase-status">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-              Firebase sincronizado em tempo real
+              <span className="footer-firebase-text">Firebase sincronizado em tempo real</span>
             </span>
-            <span className="text-gray-400">|</span>
-            <span className="text-orange-400 font-extrabold">Acesso: {currentUser?.nome} ({currentUser?.perfil})</span>
+            <span className="text-gray-400 footer-divider">|</span>
+            <span className="text-orange-400 font-extrabold footer-user-acesso">Acesso: {currentUser?.nome} ({currentUser?.perfil})</span>
           </div>
         </footer>
       </div>

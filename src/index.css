@@ -522,6 +522,71 @@ body {
   }
 }
 
+@media (max-width: 768px) {
+  /* 1. Fixed footer at the bottom */
+  .system-footer {
+    position: fixed !important;
+    bottom: 0 !important;
+    /* 7. Position corresponding to the actual width of the collapsed sidebar (w-16, which is 64px) */
+    left: 64px !important;
+    width: calc(100% - 64px) !important;
+    max-width: calc(100% - 64px) !important;
+    z-index: 30 !important;
+    
+    /* 2. One centralized column */
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    overflow: hidden !important;
+    padding: 8px 6px !important;
+    height: 32px !important;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  /* 5. Hide institutional text, access data, and full Firebase text on mobile */
+  .footer-left {
+    display: none !important;
+  }
+  .footer-right {
+    display: none !important;
+  }
+
+  /* 3. Show developer credits only */
+  .footer-developer {
+    position: static !important;
+    justify-self: center !important;
+    white-space: nowrap !important;
+    /* 4. Font size between 10px and 11px */
+    font-size: 10.5px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+  }
+
+  .footer-developer-icon {
+    font-size: 13px !important;
+  }
+
+  /* 6. Keep small green ONLINE status indicator */
+  .footer-mobile-status {
+    display: inline-flex !important;
+    font-size: 9px !important;
+    font-weight: 800 !important;
+  }
+
+  /* 8. Add padding-bottom to the main content container to prevent overlapping of cards */
+  main {
+    padding-bottom: 48px !important;
+  }
+
+  /* 9. Prevent horizontal scroll globally for elements */
+  html, body, #root, .flex-1 {
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+}
+
 @media print {
   .system-footer {
     display: none !important;
