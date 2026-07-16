@@ -451,32 +451,31 @@ body {
 }
 
 /* System Footer and Developer Credit Styles */
-.system-footer {
+.app-footer {
   display: grid !important;
-  grid-template-columns: minmax(320px, 1fr) max-content minmax(580px, 1fr) !important;
+  grid-template-columns: minmax(300px, 1fr) minmax(340px, max-content) minmax(650px, 1fr) !important;
   align-items: center !important;
-  gap: 24px !important;
+  column-gap: 40px !important;
   width: 100% !important;
 }
 
 .footer-left {
   justify-self: start !important;
   white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  min-width: 0 !important;
 }
 
 .footer-developer {
   position: static !important;
   justify-self: center !important;
+  white-space: nowrap !important;
+  margin: 0 !important;
+  transform: none !important;
   display: inline-flex !important;
   align-items: center !important;
   gap: 7px !important;
   color: #F8FAFC !important;
   font-size: 12px !important;
   font-weight: 600 !important;
-  white-space: nowrap !important;
 }
 
 .footer-developer-icon {
@@ -487,19 +486,23 @@ body {
 }
 
 .footer-right {
+  position: static !important;
   justify-self: end !important;
   display: flex !important;
-  justify-content: flex-end !important;
   align-items: center !important;
-  gap: 16px !important;
+  gap: 20px !important;
   white-space: nowrap !important;
-  min-width: 0 !important;
+  margin: 0 !important;
+  transform: none !important;
 }
 
-@media (max-width: 1500px) {
-  .system-footer {
-    grid-template-columns: minmax(240px, 1fr) max-content minmax(450px, 1fr) !important;
-    gap: 16px !important;
+@media (min-width: 769px) and (max-width: 1500px) {
+  .app-footer {
+    grid-template-columns: 0px minmax(340px, max-content) minmax(450px, 1fr) !important;
+    column-gap: 20px !important;
+  }
+  .footer-left {
+    display: none !important;
   }
   .footer-developer {
     font-size: 10px !important;
@@ -508,17 +511,7 @@ body {
     font-size: 14px !important;
   }
   .footer-right {
-    gap: 10px !important;
-  }
-}
-
-@media (max-width: 1280px) {
-  .system-footer {
-    grid-template-columns: 0px max-content 1fr !important;
     gap: 12px !important;
-  }
-  .footer-left {
-    display: none !important;
   }
 }
 

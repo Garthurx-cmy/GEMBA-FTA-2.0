@@ -2091,6 +2091,7 @@ export default function DashboardView({
                                 <ResolvedImage
                                   key={i}
                                   src={img}
+                                  rotation={insp.rotacoesFotosAntes ? insp.rotacoesFotosAntes[i] || 0 : 0}
                                   alt="Antes"
                                   referrerPolicy="no-referrer"
                                   className="w-12 h-12 rounded object-cover border border-gray-100 shadow-2xs hover:scale-150 transition-transform cursor-zoom-in"
@@ -2107,6 +2108,7 @@ export default function DashboardView({
                                 <ResolvedImage
                                   key={i}
                                   src={img}
+                                  rotation={insp.rotacoesFotosDepois ? insp.rotacoesFotosDepois[i] || 0 : 0}
                                   alt="Depois"
                                   referrerPolicy="no-referrer"
                                   className="w-12 h-12 rounded object-cover border border-gray-100 shadow-2xs hover:scale-150 transition-transform cursor-zoom-in"

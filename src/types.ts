@@ -36,6 +36,8 @@ export interface Inspection {
   observacoes?: string | null;
   fotosAntes?: string[];
   fotosDepois?: string[];
+  rotacoesFotosAntes?: number[];
+  rotacoesFotosDepois?: number[];
   armazenamentoFotos?: "firestore-inline";
   temaDSS?: string | null;
   quantidadeParticipantes?: number | "" | null;

@@ -23,7 +23,7 @@ interface RelatoriosViewProps {
 }
 
 // Beautiful automatic photo layout organizer (No cropping, auto fit, page break safe)
-function PhotoGrid({ title, photos, isBefore }: { title: string; photos: string[]; isBefore: boolean }) {
+function PhotoGrid({ title, photos, isBefore, rotations }: { title: string; photos: string[]; isBefore: boolean; rotations?: number[] }) {
   const count = photos.length;
 
   if (count === 0) {
@@ -65,6 +65,7 @@ function PhotoGrid({ title, photos, isBefore }: { title: string; photos: string[
               {/* object-contain ensures images are never cropped, showing full structural details */}
               <ResolvedImage
                 src={img}
+                rotation={rotations ? rotations[idx] || 0 : 0}
                 alt={`${title} ${idx + 1}`}
                 className="w-full h-full object-contain max-h-[180px] select-none photo-img"
                 referrerPolicy="no-referrer"
@@ -1215,13 +1216,13 @@ export default function RelatoriosView({
                         {/* PHOTO GRID WITH AUTOMATIC ORGANIZER (Avois slicing over page-breaks) */}
                         <div className={`grid gap-5 pt-4 border-t border-gray-100 break-inside-avoid page-break-inside-avoid photo-container-grid ${(isDSS || isPresenca) ? "grid-cols-1 max-w-xl mx-auto" : "grid-cols-1 md:grid-cols-2"}`}>
                           {isPresenca ? (
-                            <PhotoGrid title="Fotos da Presença em Campo" photos={selectedInspection.fotosAntes || []} isBefore={false} />
+                            <PhotoGrid title="Fotos da Presença em Campo" photos={selectedInspection.fotosAntes || []} isBefore={false} rotations={selectedInspection.rotacoesFotosAntes} />
                           ) : isDSS ? (
-                            <PhotoGrid title="Evidências do DSS (Registro Fotográfico)" photos={selectedInspection.fotosAntes || []} isBefore={false} />
+                            <PhotoGrid title="Evidências do DSS (Registro Fotográfico)" photos={selectedInspection.fotosAntes || []} isBefore={false} rotations={selectedInspection.rotacoesFotosAntes} />
                           ) : (
                             <>
-                              <PhotoGrid title="Registro Fotográfico - Antes" photos={selectedInspection.fotosAntes || []} isBefore={true} />
-                              <PhotoGrid title="Registro Fotográfico - Depois (Tratado)" photos={selectedInspection.fotosDepois || []} isBefore={false} />
+                              <PhotoGrid title="Registro Fotográfico - Antes" photos={selectedInspection.fotosAntes || []} isBefore={true} rotations={selectedInspection.rotacoesFotosAntes} />
+                              <PhotoGrid title="Registro Fotográfico - Depois (Tratado)" photos={selectedInspection.fotosDepois || []} isBefore={false} rotations={selectedInspection.rotacoesFotosDepois} />
                             </>
                           )}
                         </div>

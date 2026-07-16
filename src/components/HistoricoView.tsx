@@ -77,6 +77,65 @@ export default function HistoricoView({
   const [galleryInspection, setGalleryInspection] = useState<Inspection | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
+  // --- PHOTO ROTATION STATE & HANDLER ---
+  const [savingRotationId, setSavingRotationId] = useState<string | null>(null);
+
+  const handleRotatePhoto = async (
+    inspection: Inspection,
+    type: "before" | "after",
+    index: number,
+    direction: "left" | "right"
+  ) => {
+    const id = `${inspection.id}-${type}-${index}`;
+    setSavingRotationId(id);
+
+    try {
+      // Get current rotation arrays
+      const currentAntes = inspection.rotacoesFotosAntes || [];
+      const currentDepois = inspection.rotacoesFotosDepois || [];
+
+      // Make sure the arrays have the same length as the photos array (initialized with 0 if missing)
+      const numAntes = inspection.fotosAntes?.length || 0;
+      const numDepois = inspection.fotosDepois?.length || 0;
+
+      const antesRot = Array.from({ length: numAntes }, (_, i) => currentAntes[i] || 0);
+      const depoisRot = Array.from({ length: numDepois }, (_, i) => currentDepois[i] || 0);
+
+      if (type === "before") {
+        const currentAngle = antesRot[index] || 0;
+        const diff = direction === "left" ? -90 : 90;
+        const newAngle = ((currentAngle + diff) % 360 + 360) % 360;
+        antesRot[index] = newAngle;
+      } else {
+        const currentAngle = depoisRot[index] || 0;
+        const diff = direction === "left" ? -90 : 90;
+        const newAngle = ((currentAngle + diff) % 360 + 360) % 360;
+        depoisRot[index] = newAngle;
+      }
+
+      const updatedInspection: Inspection = {
+        ...inspection,
+        rotacoesFotosAntes: antesRot,
+        rotacoesFotosDepois: depoisRot,
+        updatedAt: new Date().toISOString()
+      };
+
+      await dbService.saveInspection(updatedInspection);
+
+      // Also update the local state if it's currently open in any of the modals
+      if (viewingInspection && viewingInspection.id === inspection.id) {
+        setViewingInspection(updatedInspection);
+      }
+      if (galleryInspection && galleryInspection.id === inspection.id) {
+        setGalleryInspection(updatedInspection);
+      }
+    } catch (err) {
+      console.error("Erro ao salvar rotação:", err);
+    } finally {
+      setSavingRotationId(null);
+    }
+  };
+
   // --- FILTERED INSPECTIONS ---
   const filteredInspections = useMemo(() => {
     return inspections.filter((item) => {
@@ -583,8 +642,71 @@ export default function HistoricoView({
                     {viewingInspection.fotosAntes.length > 0 && (
                       <div className="space-y-1 text-center">
                         <span className="text-[9px] uppercase font-bold text-red-500 block">Antes</span>
-                        <div className="aspect-video rounded overflow-hidden border border-gray-100">
-                          <ResolvedImage src={viewingInspection.fotosAntes[0]} alt="Antes" className="w-full h-full object-cover" />
+                        <div className="flex flex-col items-center w-full">
+                          <div className="aspect-video rounded overflow-hidden border border-gray-100 bg-gray-50 relative group w-full">
+                            <ResolvedImage
+                              src={viewingInspection.fotosAntes[0]}
+                              rotation={viewingInspection.rotacoesFotosAntes ? viewingInspection.rotacoesFotosAntes[0] || 0 : 0}
+                              alt="Antes"
+                              className="w-full h-full object-cover"
+                            />
+                            {/* Desktop hover controls */}
+                            {currentUser?.perfil !== "visitante" && (
+                              <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 no-print p-2">
+                                {savingRotationId === `${viewingInspection.id}-before-0` ? (
+                                  <span className="text-[10px] text-white font-extrabold animate-pulse bg-black/50 px-2 py-1 rounded">
+                                    Salvando rotação...
+                                  </span>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRotatePhoto(viewingInspection, "before", 0, "left")}
+                                      className="p-1.5 bg-white/90 hover:bg-white text-gray-800 rounded-full shadow hover:scale-110 transition cursor-pointer flex items-center justify-center"
+                                      title="Girar para esquerda"
+                                    >
+                                      <span className="text-sm font-bold">↺</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRotatePhoto(viewingInspection, "before", 0, "right")}
+                                      className="p-1.5 bg-white/90 hover:bg-white text-gray-800 rounded-full shadow hover:scale-110 transition cursor-pointer flex items-center justify-center"
+                                      title="Girar para direita"
+                                    >
+                                      <span className="text-sm font-bold">↻</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          {/* Mobile persistent controls */}
+                          {currentUser?.perfil !== "visitante" && (
+                            <div className="flex items-center gap-2 mt-1.5 no-print md:hidden">
+                              {savingRotationId === `${viewingInspection.id}-before-0` ? (
+                                <span className="text-[9px] text-orange-500 font-bold animate-pulse">
+                                  Salvando rotação...
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRotatePhoto(viewingInspection, "before", 0, "left")}
+                                    className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-bold rounded flex items-center gap-0.5"
+                                  >
+                                    ↺ Esq
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRotatePhoto(viewingInspection, "before", 0, "right")}
+                                    className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-bold rounded flex items-center gap-0.5"
+                                  >
+                                    ↻ Dir
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -592,8 +714,71 @@ export default function HistoricoView({
                     {viewingInspection.fotosDepois.length > 0 && (
                       <div className="space-y-1 text-center">
                         <span className="text-[9px] uppercase font-bold text-green-500 block">Depois</span>
-                        <div className="aspect-video rounded overflow-hidden border border-gray-100">
-                          <ResolvedImage src={viewingInspection.fotosDepois[0]} alt="Depois" className="w-full h-full object-cover" />
+                        <div className="flex flex-col items-center w-full">
+                          <div className="aspect-video rounded overflow-hidden border border-gray-100 bg-gray-50 relative group w-full">
+                            <ResolvedImage
+                              src={viewingInspection.fotosDepois[0]}
+                              rotation={viewingInspection.rotacoesFotosDepois ? viewingInspection.rotacoesFotosDepois[0] || 0 : 0}
+                              alt="Depois"
+                              className="w-full h-full object-cover"
+                            />
+                            {/* Desktop hover controls */}
+                            {currentUser?.perfil !== "visitante" && (
+                              <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 no-print p-2">
+                                {savingRotationId === `${viewingInspection.id}-after-0` ? (
+                                  <span className="text-[10px] text-white font-extrabold animate-pulse bg-black/50 px-2 py-1 rounded">
+                                    Salvando rotação...
+                                  </span>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRotatePhoto(viewingInspection, "after", 0, "left")}
+                                      className="p-1.5 bg-white/90 hover:bg-white text-gray-800 rounded-full shadow hover:scale-110 transition cursor-pointer flex items-center justify-center"
+                                      title="Girar para esquerda"
+                                    >
+                                      <span className="text-sm font-bold">↺</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRotatePhoto(viewingInspection, "after", 0, "right")}
+                                      className="p-1.5 bg-white/90 hover:bg-white text-gray-800 rounded-full shadow hover:scale-110 transition cursor-pointer flex items-center justify-center"
+                                      title="Girar para direita"
+                                    >
+                                      <span className="text-sm font-bold">↻</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          {/* Mobile persistent controls */}
+                          {currentUser?.perfil !== "visitante" && (
+                            <div className="flex items-center gap-2 mt-1.5 no-print md:hidden">
+                              {savingRotationId === `${viewingInspection.id}-after-0` ? (
+                                <span className="text-[9px] text-orange-500 font-bold animate-pulse">
+                                  Salvando rotação...
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRotatePhoto(viewingInspection, "after", 0, "left")}
+                                    className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-bold rounded flex items-center gap-0.5"
+                                  >
+                                    ↺ Esq
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRotatePhoto(viewingInspection, "after", 0, "right")}
+                                    className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-bold rounded flex items-center gap-0.5"
+                                  >
+                                    ↻ Dir
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -654,8 +839,71 @@ export default function HistoricoView({
                 </h4>
                 <div className="grid grid-cols-2 gap-2">
                   {galleryInspection.fotosAntes.map((img, idx) => (
-                    <div key={idx} className="aspect-video rounded border overflow-hidden bg-gray-50">
-                      <ResolvedImage src={img} alt="Antes" className="w-full h-full object-cover" />
+                    <div key={idx} className="flex flex-col items-center w-full">
+                      <div className="aspect-video rounded border overflow-hidden bg-gray-50 relative group w-full">
+                        <ResolvedImage
+                          src={img}
+                          rotation={galleryInspection.rotacoesFotosAntes ? galleryInspection.rotacoesFotosAntes[idx] || 0 : 0}
+                          alt="Antes"
+                          className="w-full h-full object-cover"
+                        />
+                        {/* Desktop hover controls */}
+                        {currentUser?.perfil !== "visitante" && (
+                          <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 no-print p-2">
+                            {savingRotationId === `${galleryInspection.id}-before-${idx}` ? (
+                              <span className="text-[10px] text-white font-extrabold animate-pulse bg-black/50 px-2 py-1 rounded">
+                                Salvando rotação...
+                              </span>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRotatePhoto(galleryInspection, "before", idx, "left")}
+                                  className="p-1.5 bg-white/90 hover:bg-white text-gray-800 rounded-full shadow hover:scale-110 transition cursor-pointer flex items-center justify-center"
+                                  title="Girar para esquerda"
+                                >
+                                  <span className="text-sm font-bold">↺</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRotatePhoto(galleryInspection, "before", idx, "right")}
+                                  className="p-1.5 bg-white/90 hover:bg-white text-gray-800 rounded-full shadow hover:scale-110 transition cursor-pointer flex items-center justify-center"
+                                  title="Girar para direita"
+                                >
+                                  <span className="text-sm font-bold">↻</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {/* Mobile persistent controls */}
+                      {currentUser?.perfil !== "visitante" && (
+                        <div className="flex items-center gap-2 mt-1.5 no-print md:hidden">
+                          {savingRotationId === `${galleryInspection.id}-before-${idx}` ? (
+                            <span className="text-[9px] text-orange-500 font-bold animate-pulse">
+                              Salvando rotação...
+                            </span>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleRotatePhoto(galleryInspection, "before", idx, "left")}
+                                className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-bold rounded flex items-center gap-0.5"
+                              >
+                                ↺ Esq
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRotatePhoto(galleryInspection, "before", idx, "right")}
+                                className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-bold rounded flex items-center gap-0.5"
+                              >
+                                ↻ Dir
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                   {galleryInspection.fotosAntes.length === 0 && (
@@ -673,8 +921,71 @@ export default function HistoricoView({
                 </h4>
                 <div className="grid grid-cols-2 gap-2">
                   {galleryInspection.fotosDepois.map((img, idx) => (
-                    <div key={idx} className="aspect-video rounded border overflow-hidden bg-gray-50">
-                      <ResolvedImage src={img} alt="Depois" className="w-full h-full object-cover" />
+                    <div key={idx} className="flex flex-col items-center w-full">
+                      <div className="aspect-video rounded border overflow-hidden bg-gray-50 relative group w-full">
+                        <ResolvedImage
+                          src={img}
+                          rotation={galleryInspection.rotacoesFotosDepois ? galleryInspection.rotacoesFotosDepois[idx] || 0 : 0}
+                          alt="Depois"
+                          className="w-full h-full object-cover"
+                        />
+                        {/* Desktop hover controls */}
+                        {currentUser?.perfil !== "visitante" && (
+                          <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 no-print p-2">
+                            {savingRotationId === `${galleryInspection.id}-after-${idx}` ? (
+                              <span className="text-[10px] text-white font-extrabold animate-pulse bg-black/50 px-2 py-1 rounded">
+                                Salvando rotação...
+                              </span>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRotatePhoto(galleryInspection, "after", idx, "left")}
+                                  className="p-1.5 bg-white/90 hover:bg-white text-gray-800 rounded-full shadow hover:scale-110 transition cursor-pointer flex items-center justify-center"
+                                  title="Girar para esquerda"
+                                >
+                                  <span className="text-sm font-bold">↺</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRotatePhoto(galleryInspection, "after", idx, "right")}
+                                  className="p-1.5 bg-white/90 hover:bg-white text-gray-800 rounded-full shadow hover:scale-110 transition cursor-pointer flex items-center justify-center"
+                                  title="Girar para direita"
+                                >
+                                  <span className="text-sm font-bold">↻</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {/* Mobile persistent controls */}
+                      {currentUser?.perfil !== "visitante" && (
+                        <div className="flex items-center gap-2 mt-1.5 no-print md:hidden">
+                          {savingRotationId === `${galleryInspection.id}-after-${idx}` ? (
+                            <span className="text-[9px] text-orange-500 font-bold animate-pulse">
+                              Salvando rotação...
+                            </span>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleRotatePhoto(galleryInspection, "after", idx, "left")}
+                                className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-bold rounded flex items-center gap-0.5"
+                              >
+                                ↺ Esq
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRotatePhoto(galleryInspection, "after", idx, "right")}
+                                className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-bold rounded flex items-center gap-0.5"
+                              >
+                                ↻ Dir
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                   {galleryInspection.fotosDepois.length === 0 && (

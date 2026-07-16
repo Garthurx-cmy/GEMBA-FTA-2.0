@@ -28,6 +28,7 @@ import RankingView from "./components/RankingView";
 import RelatoriosView from "./components/RelatoriosView";
 import ExportacoesView from "./components/ExportacoesView";
 import ConfiguracoesView from "./components/ConfiguracoesView";
+import ResolvedImage from "./components/ResolvedImage";
 import { CheckCircle, AlertCircle, Building2, Bell, Search, FileText, X, ExternalLink } from "lucide-react";
 
 export default function App() {
@@ -694,7 +695,7 @@ export default function App() {
         </main>
 
         {/* HIGH-DENSITY SYSTEM FOOTER */}
-        <footer className="h-8 bg-[#0B2E59] px-6 shrink-0 text-white text-[9px] font-bold tracking-wider border-t border-[#092241] select-none uppercase no-print system-footer">
+        <footer className="h-8 bg-[#0B2E59] px-6 shrink-0 text-white text-[9px] font-bold tracking-wider border-t border-[#092241] select-none uppercase no-print system-footer app-footer">
           <div className="footer-left">
             {config.nomeEmpresa} &copy; {new Date().getFullYear()} — {config.nomeSistema}
           </div>
@@ -824,13 +825,25 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-3">
                     {viewingGlobalInspection.fotosAntes && viewingGlobalInspection.fotosAntes.map((pic, idx) => (
                       <div key={idx} className="relative rounded-lg overflow-hidden border border-gray-100 bg-slate-50 h-28 flex flex-col justify-between">
-                        <img src={pic} alt="Antes" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        <ResolvedImage
+                          src={pic}
+                          rotation={viewingGlobalInspection.rotacoesFotosAntes ? viewingGlobalInspection.rotacoesFotosAntes[idx] || 0 : 0}
+                          alt="Antes"
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
                         <span className="absolute bottom-1 left-1 bg-red-600/95 text-white font-extrabold text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded">Antes</span>
                       </div>
                     ))}
                     {viewingGlobalInspection.fotosDepois && viewingGlobalInspection.fotosDepois.map((pic, idx) => (
                       <div key={idx} className="relative rounded-lg overflow-hidden border border-gray-100 bg-slate-50 h-28 flex flex-col justify-between">
-                        <img src={pic} alt="Depois" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        <ResolvedImage
+                          src={pic}
+                          rotation={viewingGlobalInspection.rotacoesFotosDepois ? viewingGlobalInspection.rotacoesFotosDepois[idx] || 0 : 0}
+                          alt="Depois"
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
                         <span className="absolute bottom-1 left-1 bg-green-600/95 text-white font-extrabold text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded">Depois</span>
                       </div>
                     ))}
