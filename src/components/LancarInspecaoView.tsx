@@ -28,6 +28,8 @@ import {
   X,
   UploadCloud
 } from "lucide-react";
+import { convertHeicFileToJpegDataUrl } from "../utils/heicHelper";
+
 
 interface LancarInspecaoViewProps {
   supervisors: Supervisor[];
@@ -215,49 +217,56 @@ export default function LancarInspecaoView({
     const fileList = (Array.from(files) as File[]).slice(0, remaining);
     if (files.length > remaining) alert(`Somente ${remaining} foto(s) adicional(is) serão anexadas.`);
     
-    setCompressingStatus("Comprimindo imagens...");
+    setCompressingStatus("Processando imagens...");
     setError("");
 
     let processedCount = 0;
-    fileList.forEach((file) => {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        if (typeof reader.result === "string") {
-          try {
-            const compressed = await compressImage(reader.result);
-            if (type === "before") {
-              setFotosAntes((prev) => {
-                const updated = [...prev, compressed];
-                return updated.slice(0, 3);
-              });
-            } else {
-              setFotosDepois((prev) => {
-                const updated = [...prev, compressed];
-                return updated.slice(0, 3);
-              });
-            }
-          } catch (error) {
-            console.error("Erro ao comprimir imagem:", error);
-            // fallback if compression fails
-            if (type === "before") {
-              setFotosAntes((prev) => [...prev, reader.result as string].slice(0, 3));
-            } else {
-              setFotosDepois((prev) => [...prev, reader.result as string].slice(0, 3));
-            }
-          }
+    fileList.forEach(async (file) => {
+      try {
+        let originalDataUrl = "";
+        const isHeicFile = file.type === "image/heic" || file.type === "image/heif" || file.name.toLowerCase().endsWith(".heic") || file.name.toLowerCase().endsWith(".heif");
+
+        if (isHeicFile) {
+          setCompressingStatus("Convertendo HEIC para JPEG...");
+          originalDataUrl = await convertHeicFileToJpegDataUrl(file);
+        } else {
+          originalDataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              if (typeof reader.result === "string") {
+                resolve(reader.result);
+              } else {
+                reject(new Error("Erro ao ler arquivo."));
+              }
+            };
+            reader.onerror = () => reject(reader.error || new Error("Erro ao ler arquivo."));
+            reader.readAsDataURL(file);
+          });
         }
+
+        setCompressingStatus("Comprimindo imagens...");
+        const compressed = await compressImage(originalDataUrl);
+
+        if (type === "before") {
+          setFotosAntes((prev) => {
+            const updated = [...prev, compressed];
+            return updated.slice(0, 3);
+          });
+        } else {
+          setFotosDepois((prev) => {
+            const updated = [...prev, compressed];
+            return updated.slice(0, 3);
+          });
+        }
+      } catch (err) {
+        console.error("Erro ao processar imagem:", err);
+        setError("Não foi possível processar esta foto.");
+      } finally {
         processedCount++;
         if (processedCount === fileList.length) {
           setCompressingStatus("");
         }
-      };
-      reader.onerror = () => {
-        processedCount++;
-        if (processedCount === fileList.length) {
-          setCompressingStatus("");
-        }
-      };
-      reader.readAsDataURL(file);
+      }
     });
     e.target.value = "";
   };

@@ -9,6 +9,8 @@ import { Inspection, Supervisor, Area, Contract, SystemConfig, getTipoLancamento
 import { Printer, FileText, Calendar, User, ShieldAlert, CheckCircle, Eye, RefreshCw, Download, Filter, XCircle } from "lucide-react";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
+import ResolvedImage from "./ResolvedImage";
+
 import assinaturaJhonata from "../assets/assinatura-jhonata.png?inline";
 
 interface RelatoriosViewProps {
@@ -61,7 +63,7 @@ function PhotoGrid({ title, photos, isBefore }: { title: string; photos: string[
           return (
             <div key={idx} className="relative aspect-video rounded-lg border border-gray-200 bg-slate-50 flex items-center justify-center overflow-hidden shadow-2xs hover:shadow-xs transition-shadow photo-card-container">
               {/* object-contain ensures images are never cropped, showing full structural details */}
-              <img
+              <ResolvedImage
                 src={img}
                 alt={`${title} ${idx + 1}`}
                 className="w-full h-full object-contain max-h-[180px] select-none photo-img"
@@ -222,6 +224,7 @@ export default function RelatoriosView({
   }, [selectedId]);
 
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isPreparingPrint, setIsPreparingPrint] = useState(false);
 
   const getFallbackColor = (contents: string): string => {
     const lower = contents.toLowerCase();
@@ -374,6 +377,46 @@ export default function RelatoriosView({
     return replaceOklab(replaceOklch(str));
   };
 
+  const waitForImages = async (element: HTMLElement) => {
+    const hasPendingConversions = () => {
+      return element.innerHTML.includes("Carregando foto...");
+    };
+
+    if (hasPendingConversions()) {
+      let attempts = 0;
+      const maxAttempts = 40; // up to 20 seconds
+      while (hasPendingConversions() && attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        attempts++;
+      }
+    }
+
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+
+    const imgs = Array.from(element.getElementsByTagName("img"));
+    const imgPromises = imgs.map((img) => {
+      if (img.complete) {
+        if (typeof img.decode === "function") {
+          return img.decode().catch(() => {});
+        }
+        return Promise.resolve();
+      }
+      return new Promise<void>((resolve) => {
+        img.onload = () => {
+          if (typeof img.decode === "function") {
+            img.decode().then(resolve).catch(resolve);
+          } else {
+            resolve();
+          }
+        };
+        img.onerror = () => resolve();
+      });
+    });
+    await Promise.all(imgPromises);
+  };
+
   const handleDownloadPDF = async () => {
     if (!selectedInspection) {
       alert("Selecione uma inspeção para gerar o relatório.");
@@ -388,6 +431,8 @@ export default function RelatoriosView({
         setIsGeneratingPDF(false);
         return;
       }
+
+      await waitForImages(element);
 
       // Render canvas using html2canvas with specific layout bounds and style cleaning onclone
       const canvas = await html2canvas(element, {
@@ -518,7 +563,7 @@ export default function RelatoriosView({
     }
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     if (!selectedInspection) {
       alert("Selecione uma inspeção para gerar o relatório.");
       return;
@@ -528,16 +573,135 @@ export default function RelatoriosView({
       alert("A área do relatório não foi encontrada.");
       return;
     }
-    const printWindow = window.open("", "_blank", "width=1000,height=800");
-    if (!printWindow) {
-      alert("Permita pop-ups para abrir a impressão do relatório.");
-      return;
+
+    try {
+      setIsPreparingPrint(true);
+      await waitForImages(element);
+
+      const printWindow = window.open("", "_blank", "width=1000,height=800");
+      if (!printWindow) {
+        alert("Permita pop-ups para abrir a impressão do relatório.");
+        return;
+      }
+
+      // Collect stylesheets with absolute hrefs and style tags
+      const stylesList: string[] = [];
+      stylesList.push(`<base href="${window.location.origin}/">`);
+
+      Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).forEach(node => {
+        if (node.tagName.toLowerCase() === 'link') {
+          const link = node as HTMLLinkElement;
+          stylesList.push(`<link rel="stylesheet" href="${link.href}">`);
+        } else {
+          stylesList.push(node.outerHTML);
+        }
+      });
+
+      stylesList.push(`
+        <style>
+          @page {
+            size: A4;
+            margin: 10mm;
+          }
+          body {
+            background: white !important;
+            margin: 0;
+            padding: 0;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          #printable-report-document {
+            box-shadow: none !important;
+            border: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+        </style>
+      `);
+
+      const headContent = stylesList.join("\n");
+
+      printWindow.document.write(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Relatório GEMBA ${selectedInspection.id}</title>
+  ${headContent}
+</head>
+<body>
+  ${element.outerHTML}
+  <script>
+    async function prepareAndPrint() {
+      // 1. Wait for document fonts
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+      }
+
+      // 2. Wait for stylesheets to load
+      const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+      const linkPromises = links.map(link => {
+        return new Promise(resolve => {
+          if (link.sheet) {
+            resolve();
+          } else {
+            link.onload = resolve;
+            link.onerror = resolve;
+          }
+        });
+      });
+      await Promise.all(linkPromises);
+
+      // 3. Wait for images to load and decode
+      const images = Array.from(document.getElementsByTagName('img'));
+      const imgPromises = images.map(img => {
+        if (img.complete) {
+          if (typeof img.decode === 'function') {
+            return img.decode().catch(() => {});
+          }
+          return Promise.resolve();
+        }
+        return new Promise(resolve => {
+          img.onload = () => {
+            if (typeof img.decode === 'function') {
+              img.decode().then(resolve).catch(resolve);
+            } else {
+              resolve();
+            }
+          };
+          img.onerror = resolve;
+        });
+      });
+      await Promise.all(imgPromises);
+
+      // 4. Wait a little bit for everything to settle
+      setTimeout(() => {
+        window.print();
+        window.close();
+      }, 500);
     }
-    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).map(node => node.outerHTML).join("\n");
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Relatório GEMBA ${selectedInspection.id}</title>${styles}<style>@page{size:A4;margin:10mm}body{background:white!important;margin:0}.no-print{display:none!important}#printable-report-document{box-shadow:none!important;border:0!important;width:100%!important;max-width:none!important}</style></head><body>${element.outerHTML}</body></html>`);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
+
+    if (document.readyState === 'complete') {
+      prepareAndPrint();
+    } else {
+      window.addEventListener('load', prepareAndPrint);
+    }
+  </script>
+</body>
+</html>`);
+
+      printWindow.document.close();
+      printWindow.focus();
+    } catch (err) {
+      console.error("Erro ao preparar a impressão:", err);
+      alert("Não foi possível carregar as imagens para a impressão.");
+    } finally {
+      setIsPreparingPrint(false);
+    }
   };
 
   return (
@@ -555,7 +719,7 @@ export default function RelatoriosView({
         <div className="flex flex-wrap gap-2">
           <button
             onClick={handleDownloadPDF}
-            disabled={isGeneratingPDF}
+            disabled={isGeneratingPDF || isPreparingPrint}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-[#F58220] hover:bg-[#d66f17] disabled:bg-gray-300 text-white text-xs font-black rounded-lg shadow cursor-pointer transition-colors"
           >
             <Download size={14} className={isGeneratingPDF ? "animate-bounce" : ""} />
@@ -563,9 +727,11 @@ export default function RelatoriosView({
           </button>
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0B2E59] hover:bg-[#133e72] text-white text-xs font-black rounded-lg shadow cursor-pointer transition-colors"
+            disabled={isPreparingPrint || isGeneratingPDF}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0B2E59] hover:bg-[#133e72] disabled:bg-gray-300 text-white text-xs font-black rounded-lg shadow cursor-pointer transition-colors"
           >
-            <Printer size={14} /> Abrir Impressão
+            <Printer size={14} className={isPreparingPrint ? "animate-spin" : ""} />
+            {isPreparingPrint ? "Preparando relatório..." : "Abrir Impressão"}
           </button>
         </div>
       </div>

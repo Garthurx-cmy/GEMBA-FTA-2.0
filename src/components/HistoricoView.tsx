@@ -36,6 +36,8 @@ import {
   X,
   Printer
 } from "lucide-react";
+import ResolvedImage from "./ResolvedImage";
+
 
 interface HistoricoViewProps {
   inspections: Inspection[];
@@ -582,7 +584,7 @@ export default function HistoricoView({
                       <div className="space-y-1 text-center">
                         <span className="text-[9px] uppercase font-bold text-red-500 block">Antes</span>
                         <div className="aspect-video rounded overflow-hidden border border-gray-100">
-                          <img src={viewingInspection.fotosAntes[0]} alt="Antes" className="w-full h-full object-cover" />
+                          <ResolvedImage src={viewingInspection.fotosAntes[0]} alt="Antes" className="w-full h-full object-cover" />
                         </div>
                       </div>
                     )}
@@ -591,7 +593,7 @@ export default function HistoricoView({
                       <div className="space-y-1 text-center">
                         <span className="text-[9px] uppercase font-bold text-green-500 block">Depois</span>
                         <div className="aspect-video rounded overflow-hidden border border-gray-100">
-                          <img src={viewingInspection.fotosDepois[0]} alt="Depois" className="w-full h-full object-cover" />
+                          <ResolvedImage src={viewingInspection.fotosDepois[0]} alt="Depois" className="w-full h-full object-cover" />
                         </div>
                       </div>
                     )}
@@ -653,7 +655,7 @@ export default function HistoricoView({
                 <div className="grid grid-cols-2 gap-2">
                   {galleryInspection.fotosAntes.map((img, idx) => (
                     <div key={idx} className="aspect-video rounded border overflow-hidden bg-gray-50">
-                      <img src={img} alt="Antes" className="w-full h-full object-cover" />
+                      <ResolvedImage src={img} alt="Antes" className="w-full h-full object-cover" />
                     </div>
                   ))}
                   {galleryInspection.fotosAntes.length === 0 && (
@@ -672,7 +674,7 @@ export default function HistoricoView({
                 <div className="grid grid-cols-2 gap-2">
                   {galleryInspection.fotosDepois.map((img, idx) => (
                     <div key={idx} className="aspect-video rounded border overflow-hidden bg-gray-50">
-                      <img src={img} alt="Depois" className="w-full h-full object-cover" />
+                      <ResolvedImage src={img} alt="Depois" className="w-full h-full object-cover" />
                     </div>
                   ))}
                   {galleryInspection.fotosDepois.length === 0 && (

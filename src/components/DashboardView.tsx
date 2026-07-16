@@ -37,6 +37,7 @@ import {
   Calendar
 } from "lucide-react";
 import FarolGembaView from "./FarolGembaView";
+import ResolvedImage from "./ResolvedImage";
 
 interface DashboardViewProps {
   inspections: Inspection[];
@@ -2087,7 +2088,7 @@ export default function DashboardView({
                             <span className="text-[8px] font-extrabold text-gray-400 uppercase tracking-wider block mb-1">Antes</span>
                             <div className="flex gap-1 flex-wrap">
                               {insp.fotosAntes.map((img, i) => (
-                                <img
+                                <ResolvedImage
                                   key={i}
                                   src={img}
                                   alt="Antes"
@@ -2103,7 +2104,7 @@ export default function DashboardView({
                             <span className="text-[8px] font-extrabold text-gray-400 uppercase tracking-wider block mb-1">Depois (Tratativa)</span>
                             <div className="flex gap-1 flex-wrap">
                               {insp.fotosDepois.map((img, i) => (
-                                <img
+                                <ResolvedImage
                                   key={i}
                                   src={img}
                                   alt="Depois"
