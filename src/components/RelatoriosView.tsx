@@ -99,21 +99,99 @@ export default function RelatoriosView({
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [selectedYear, setSelectedYear] = useState<string>("");
 
+  // --- ON-DEMAND BACKGROUND FILTERING STATES ---
+  const [fetchedInspections, setFetchedInspections] = useState<Inspection[]>([]);
+  const [loadingFilters, setLoadingFilters] = useState(false);
+
+  const filtersActive = !!(
+    selectedSupervisor ||
+    selectedArea ||
+    selectedTipo ||
+    selectedStatus ||
+    selectedPotencial ||
+    startDate ||
+    endDate ||
+    selectedMonth ||
+    selectedYear
+  );
+
+  useEffect(() => {
+    if (!filtersActive) {
+      setFetchedInspections([]);
+      return;
+    }
+
+    let active = true;
+    const fetchFiltered = async () => {
+      setLoadingFilters(true);
+      try {
+        const result = await dbService.getPaginatedInspections({
+          limit: 100, // Fetch up to 100 matched records for reports
+          filters: {
+            supervisorId: selectedSupervisor,
+            areaId: selectedArea,
+            tipo: selectedTipo,
+            status: selectedStatus,
+            potencial: selectedPotencial,
+            data: startDate || undefined
+          }
+        });
+        if (active) {
+          setFetchedInspections(result.items);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar relatórios filtrados:", err);
+      } finally {
+        if (active) setLoadingFilters(false);
+      }
+    };
+
+    const timer = setTimeout(fetchFiltered, 350);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [
+    selectedSupervisor,
+    selectedArea,
+    selectedTipo,
+    selectedStatus,
+    selectedPotencial,
+    startDate,
+    endDate,
+    selectedMonth,
+    selectedYear,
+    filtersActive
+  ]);
+
+  const combinedInspections = useMemo(() => {
+    if (!filtersActive) return inspections;
+    const seen = new Set<string>();
+    const merged: Inspection[] = [];
+    [...fetchedInspections, ...inspections].forEach(item => {
+      if (!seen.has(item.id)) {
+        seen.add(item.id);
+        merged.push(item);
+      }
+    });
+    return merged;
+  }, [inspections, fetchedInspections, filtersActive]);
+
   // Calculate unique types of launch dynamically
   const uniqueTipos = useMemo(() => {
     const set = new Set<string>();
-    inspections.forEach((i) => {
+    combinedInspections.forEach((i) => {
       if (i.tipo) set.add(i.tipo);
       const resolved = getTipoLancamento(i.atividade, i.tipo);
       if (resolved) set.add(resolved);
     });
     return Array.from(set);
-  }, [inspections]);
+  }, [combinedInspections]);
 
   // Calculate unique years dynamically
   const uniqueYears = useMemo(() => {
     const years = new Set<string>();
-    inspections.forEach((i) => {
+    combinedInspections.forEach((i) => {
       if (i.data) {
         const yr = i.data.split("-")[0];
         if (yr && yr.length === 4) {
@@ -123,11 +201,11 @@ export default function RelatoriosView({
     });
     years.add(new Date().getFullYear().toString());
     return Array.from(years).sort().reverse();
-  }, [inspections]);
+  }, [combinedInspections]);
 
   // Apply filters memoized
   const filteredInspections = useMemo(() => {
-    return inspections.filter((item) => {
+    return combinedInspections.filter((item) => {
       if (selectedSupervisor && item.supervisorId !== selectedSupervisor) {
         return false;
       }
@@ -164,7 +242,7 @@ export default function RelatoriosView({
       return true;
     });
   }, [
-    inspections,
+    combinedInspections,
     selectedSupervisor,
     selectedArea,
     selectedTipo,

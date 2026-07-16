@@ -5,12 +5,13 @@
  */
 import {
   Inspection, Supervisor, Area, Contract, SystemConfig, UserProfile,
-  AppNotification, AuthorizedEmail, InspectionStatus
+  AppNotification, AuthorizedEmail, InspectionStatus, getTipoLancamento
 } from "../types";
 import { auth, db, hasFirebase } from "./firebase";
 import {
   collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot,
-  serverTimestamp, getDocs, query, where, writeBatch
+  serverTimestamp, getDocs, query, where, writeBatch,
+  orderBy, limit, startAfter, getDoc
 } from "firebase/firestore";
 
 const DEFAULT_CONFIG: SystemConfig = {
@@ -65,8 +66,14 @@ class DBService {
   startSync(currentProfile?: UserProfile): void {
     if (this.started || !hasFirebase || !db) return;
     this.started = true;
-    const syncCollection = <T,>(name: string, setter: (items: T[]) => void, sort?: (a: T, b: T) => number) => {
-      this.unsubscribes.push(onSnapshot(collection(db, name), snap => {
+    const syncCollection = <T,>(name: string, setter: (items: T[]) => void, sort?: (a: T, b: T) => number, queryLimit?: number) => {
+      let q = collection(db, name) as any;
+      if (name === "inspections") {
+        q = query(collection(db, "inspections"), orderBy("data", "desc"), limit(queryLimit || 50));
+      } else if (name === "notifications") {
+        q = query(collection(db, "notifications"), orderBy("createdAt", "desc"), limit(queryLimit || 20));
+      }
+      this.unsubscribes.push(onSnapshot(q, snap => {
         const list = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as T));
         if (sort) list.sort(sort);
         setter(list);
@@ -79,13 +86,13 @@ class DBService {
       this.emit("config");
     }, err => console.error("Falha ao sincronizar configurações:", err)));
 
-    syncCollection<Inspection>("inspections", v => this.inspections = v, (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+    syncCollection<Inspection>("inspections", v => this.inspections = v, (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime(), 50);
     syncCollection<Supervisor>("supervisors", v => this.supervisors = v);
     syncCollection<Area>("areas", v => this.areas = v);
     syncCollection<Contract>("contracts", v => this.contracts = v);
     const isAdmin = currentProfile?.perfil === "Desenvolvedor/Admin" || currentProfile?.perfil === "Administrador";
     if (isAdmin) syncCollection<UserProfile>("users", v => this.users = v);
-    syncCollection<AppNotification>("notifications", v => this.notifications = v, (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    syncCollection<AppNotification>("notifications", v => this.notifications = v, (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(), 20);
     if (isAdmin) syncCollection<AuthorizedEmail>("authorized_emails", v => this.authorizedEmails = v);
     this.unsubscribes.push(onSnapshot(collection(db, "deleted_names"), snap => {
       this.deletedNames = Object.fromEntries(snap.docs.map(d => [d.id, d.data().name || "Registro removido"]));
@@ -99,6 +106,146 @@ class DBService {
     this.started = false;
     this.inspections = []; this.supervisors = []; this.areas = []; this.contracts = [];
     this.users = []; this.notifications = []; this.authorizedEmails = [];
+  }
+
+  async getPaginatedInspections(options: {
+    limit: number;
+    startAfterDocId?: string | null;
+    filters?: {
+      searchTerm?: string;
+      supervisorId?: string;
+      areaId?: string;
+      contratoId?: string;
+      status?: string;
+      potencial?: string;
+      data?: string;
+      tipo?: string;
+    };
+  }) {
+    this.assertFirebase();
+    const f = options.filters || {};
+    
+    try {
+      // Build optimized query with direct Firestore filters
+      let q = query(collection(db, "inspections"), orderBy("data", "desc"));
+      
+      if (f.supervisorId && f.supervisorId !== "all" && f.supervisorId !== "") {
+        q = query(q, where("supervisorId", "==", f.supervisorId));
+      }
+      if (f.areaId && f.areaId !== "all" && f.areaId !== "") {
+        q = query(q, where("areaId", "==", f.areaId));
+      }
+      if (f.contratoId && f.contratoId !== "all" && f.contratoId !== "") {
+        q = query(q, where("contratoId", "==", f.contratoId));
+      }
+      if (f.status && f.status !== "all" && f.status !== "") {
+        q = query(q, where("status", "==", f.status));
+      }
+      if (f.potencial && f.potencial !== "all" && f.potencial !== "") {
+        q = query(q, where("potencial", "==", f.potencial));
+      }
+      if (f.data) {
+        q = query(q, where("data", "==", f.data));
+      }
+
+      if (options.startAfterDocId) {
+        const docSnap = await getDoc(doc(db, "inspections", options.startAfterDocId));
+        if (docSnap.exists()) {
+          q = query(q, startAfter(docSnap));
+        }
+      }
+
+      q = query(q, limit(options.limit));
+      const snap = await getDocs(q);
+      const list = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as Inspection));
+      
+      let filteredList = list;
+      if (f.tipo && f.tipo !== "all" && f.tipo !== "") {
+        filteredList = list.filter(item => getTipoLancamento(item.atividade, item.tipo) === f.tipo);
+      }
+      if (f.searchTerm) {
+        const term = f.searchTerm.toLowerCase();
+        filteredList = filteredList.filter(item => 
+          item.descricao.toLowerCase().includes(term) ||
+          item.acaoCorretiva.toLowerCase().includes(term) ||
+          item.responsavel.toLowerCase().includes(term) ||
+          (item.observacoes && item.observacoes.toLowerCase().includes(term)) ||
+          item.id.toLowerCase().includes(term)
+        );
+      }
+
+      return {
+        items: filteredList,
+        lastDocId: snap.docs.length > 0 ? snap.docs[snap.docs.length - 1].id : null,
+        hasMore: snap.docs.length === options.limit
+      };
+    } catch (err) {
+      console.warn("Firestore index query failed, using safe fallback client-side filtering:", err);
+      
+      // Fallback query: orderBy date and limit 300 to do filtering client-side
+      let q = query(collection(db, "inspections"), orderBy("data", "desc"), limit(300));
+      const snap = await getDocs(q);
+      let list = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as Inspection));
+      
+      if (f.supervisorId && f.supervisorId !== "all" && f.supervisorId !== "") {
+        list = list.filter(item => item.supervisorId === f.supervisorId);
+      }
+      if (f.areaId && f.areaId !== "all" && f.areaId !== "") {
+        list = list.filter(item => item.areaId === f.areaId);
+      }
+      if (f.contratoId && f.contratoId !== "all" && f.contratoId !== "") {
+        list = list.filter(item => item.contratoId === f.contratoId);
+      }
+      if (f.status && f.status !== "all" && f.status !== "") {
+        list = list.filter(item => item.status === f.status);
+      }
+      if (f.potencial && f.potencial !== "all" && f.potencial !== "") {
+        list = list.filter(item => item.potencial === f.potencial);
+      }
+      if (f.data) {
+        list = list.filter(item => item.data === f.data);
+      }
+      if (f.tipo && f.tipo !== "all" && f.tipo !== "") {
+        list = list.filter(item => getTipoLancamento(item.atividade, item.tipo) === f.tipo);
+      }
+      if (f.searchTerm) {
+        const term = f.searchTerm.toLowerCase();
+        list = list.filter(item => 
+          item.descricao.toLowerCase().includes(term) ||
+          item.acaoCorretiva.toLowerCase().includes(term) ||
+          item.responsavel.toLowerCase().includes(term) ||
+          (item.observacoes && item.observacoes.toLowerCase().includes(term)) ||
+          item.id.toLowerCase().includes(term)
+        );
+      }
+
+      let startIndex = 0;
+      if (options.startAfterDocId) {
+        const foundIdx = list.findIndex(item => item.id === options.startAfterDocId);
+        if (foundIdx !== -1) {
+          startIndex = foundIdx + 1;
+        }
+      }
+
+      const paginatedList = list.slice(startIndex, startIndex + options.limit);
+      return {
+        items: paginatedList,
+        lastDocId: paginatedList.length > 0 ? paginatedList[paginatedList.length - 1].id : null,
+        hasMore: startIndex + options.limit < list.length
+      };
+    }
+  }
+
+  async getInspectionById(id: string): Promise<Inspection | null> {
+    this.assertFirebase();
+    const cached = this.inspections.find(i => i.id === id);
+    if (cached) return cached;
+    
+    const docSnap = await getDoc(doc(db, "inspections", id));
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...this.convert(docSnap.data()) } as Inspection;
+    }
+    return null;
   }
 
   getInspections = () => [...this.inspections];

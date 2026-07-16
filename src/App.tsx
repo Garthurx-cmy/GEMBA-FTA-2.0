@@ -258,9 +258,25 @@ export default function App() {
   };
 
   // Open individual inspection report inside Relatorios View
-  const handleSelectInspectionReport = (id: string) => {
+  const handleSelectInspectionReport = async (id: string) => {
     setReportSelectedInspectionId(id);
     setActiveTab("relatorios");
+
+    // On-demand loading of selected report if not already loaded in the preloaded inspections list
+    const alreadyLoaded = inspections.some(i => i.id === id);
+    if (!alreadyLoaded) {
+      try {
+        const fetched = await dbService.getInspectionById(id);
+        if (fetched) {
+          setInspections(prev => {
+            if (prev.some(i => i.id === fetched.id)) return prev;
+            return [fetched, ...prev];
+          });
+        }
+      } catch (err) {
+        console.error("Erro ao carregar relatório selecionado sob demanda:", err);
+      }
+    }
   };
 
   const handleEditInspectionInitiate = (inspection: Inspection) => {

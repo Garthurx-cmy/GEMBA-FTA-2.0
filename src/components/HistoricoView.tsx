@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { dbService } from "../services/db";
 import {
   Inspection,
@@ -136,45 +136,30 @@ export default function HistoricoView({
     }
   };
 
-  // --- FILTERED INSPECTIONS ---
-  const filteredInspections = useMemo(() => {
-    return inspections.filter((item) => {
-      // Search term (ID, Description, Action, Responsavel, etc.)
-      const term = searchTerm.toLowerCase();
-      const matchesSearch =
-        item.descricao.toLowerCase().includes(term) ||
-        item.acaoCorretiva.toLowerCase().includes(term) ||
-        item.responsavel.toLowerCase().includes(term) ||
-        (item.observacoes && item.observacoes.toLowerCase().includes(term)) ||
-        item.id.toLowerCase().includes(term);
+  // --- PAGINATION STATES ---
+  const [localInspections, setLocalInspections] = useState<Inspection[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [docHistory, setDocHistory] = useState<(string | null)[]>([null]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-      if (!matchesSearch) return false;
+  // Sync / Listen to DB updates to auto-refresh current page
+  useEffect(() => {
+    const handleDbUpdate = (e: any) => {
+      if (e.detail?.key === "inspections") {
+        setRefreshTrigger(prev => prev + 1);
+      }
+    };
+    window.addEventListener("gemba_fta_db_update", handleDbUpdate);
+    return () => window.removeEventListener("gemba_fta_db_update", handleDbUpdate);
+  }, []);
 
-      // Supervisor
-      if (selectedSupervisor !== "all" && item.supervisorId !== selectedSupervisor) return false;
-
-      // Area
-      if (selectedArea !== "all" && item.areaId !== selectedArea) return false;
-
-      // Contract
-      if (selectedContract !== "all" && item.contratoId !== selectedContract) return false;
-
-      // Type
-      if (selectedTipo !== "all" && getTipoLancamento(item.atividade, item.tipo) !== selectedTipo) return false;
-
-      // Status
-      if (selectedStatus !== "all" && item.status !== selectedStatus) return false;
-
-      // Potential
-      if (selectedPotencial !== "all" && item.potencial !== selectedPotencial) return false;
-
-      // Date
-      if (filterDate && item.data !== filterDate) return false;
-
-      return true;
-    });
+  // Reset to first page when search terms or filter configurations change
+  useEffect(() => {
+    setCurrentPage(1);
+    setDocHistory([null]);
   }, [
-    inspections,
     searchTerm,
     selectedSupervisor,
     selectedArea,
@@ -184,6 +169,68 @@ export default function HistoricoView({
     selectedPotencial,
     filterDate
   ]);
+
+  // Load paginated data from Firestore on-demand
+  useEffect(() => {
+    let active = true;
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const startAfterId = docHistory[currentPage - 1] || null;
+        const result = await dbService.getPaginatedInspections({
+          limit: 25,
+          startAfterDocId: startAfterId,
+          filters: {
+            searchTerm: searchTerm.trim() || undefined,
+            supervisorId: selectedSupervisor,
+            areaId: selectedArea,
+            contratoId: selectedContract,
+            status: selectedStatus,
+            potencial: selectedPotencial,
+            data: filterDate || undefined,
+            tipo: selectedTipo
+          }
+        });
+        
+        if (active) {
+          setLocalInspections(result.items);
+          setHasMore(result.hasMore);
+          if (result.lastDocId) {
+            setDocHistory(prev => {
+              const copy = [...prev];
+              copy[currentPage] = result.lastDocId;
+              return copy;
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao carregar histórico paginado:", err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    // Debounce to prevent multiple queries during typing
+    const timer = setTimeout(fetchData, 350);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [
+    currentPage,
+    searchTerm,
+    selectedSupervisor,
+    selectedArea,
+    selectedContract,
+    selectedTipo,
+    selectedStatus,
+    selectedPotencial,
+    filterDate,
+    refreshTrigger
+  ]);
+
+  // Map filteredInspections to localInspections so that the table renders perfectly
+  const filteredInspections = localInspections;
 
   // Helper resolvers
   const getSupervisorName = (id: string) => supervisors.find((s) => s.id === id)?.nome || dbService.getDeletedNames()[id] || "Outros";
@@ -495,6 +542,32 @@ export default function HistoricoView({
               )}
             </tbody>
           </table>
+        </div>
+        
+        {/* Pagination controls */}
+        <div className="flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-100">
+          <div className="text-[10px] text-gray-500 font-extrabold tracking-wider uppercase flex items-center gap-2">
+            <span>Página {currentPage}</span>
+            {loading && (
+              <span className="inline-block w-2.5 h-2.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1 || loading}
+              className="px-3 py-1.5 bg-white border border-gray-200 text-[#0B2E59] text-xs font-bold rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors cursor-pointer"
+            >
+              Anterior
+            </button>
+            <button
+              onClick={() => setCurrentPage(prev => prev + 1)}
+              disabled={!hasMore || loading}
+              className="px-3 py-1.5 bg-white border border-gray-200 text-[#0B2E59] text-xs font-bold rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors cursor-pointer"
+            >
+              Próximo
+            </button>
+          </div>
         </div>
       </div>
 
