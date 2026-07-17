@@ -6,7 +6,24 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { auth, db } from "./services/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence, browserSessionPersistence, sendPasswordResetEmail, updatePassword } from "firebase/auth";
-import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc as fbUpdateDoc, setDoc as fbSetDoc, serverTimestamp } from "firebase/firestore";
+
+// Trace helper for writes in development
+const setDoc = async (ref: any, data: any, options?: any) => {
+  if (process.env.NODE_ENV !== "production") {
+    const path = ref && typeof ref.path === "string" ? ref.path : "unknown-path";
+    console.trace("[FIRESTORE WRITE]", path, "setDoc", data);
+  }
+  return fbSetDoc(ref, data, options);
+};
+
+const updateDoc = async (ref: any, data: any) => {
+  if (process.env.NODE_ENV !== "production") {
+    const path = ref && typeof ref.path === "string" ? ref.path : "unknown-path";
+    console.trace("[FIRESTORE WRITE]", path, "updateDoc", data);
+  }
+  return fbUpdateDoc(ref, data);
+};
 import { dbService } from "./services/db";
 import {
   Inspection,
@@ -253,7 +270,33 @@ export default function App() {
           return;
         }
         setCurrentUser(profile);
-        await updateDoc(doc(db, "users", firebaseUser.uid), { ultimoLogin: serverTimestamp() }).catch(() => undefined);
+        
+        let shouldUpdateLogin = true;
+        if (profile && profile.ultimoLogin) {
+          try {
+            let lastLoginDate: Date | null = null;
+            if (profile.ultimoLogin && typeof profile.ultimoLogin.toDate === "function") {
+              lastLoginDate = profile.ultimoLogin.toDate();
+            } else if (profile.ultimoLogin && typeof profile.ultimoLogin === "object" && (profile.ultimoLogin as any).seconds) {
+              lastLoginDate = new Date((profile.ultimoLogin as any).seconds * 1000);
+            } else if (profile.ultimoLogin) {
+              lastLoginDate = new Date(profile.ultimoLogin);
+            }
+            if (lastLoginDate && !isNaN(lastLoginDate.getTime())) {
+              const diffMs = Date.now() - lastLoginDate.getTime();
+              // Grava no máximo uma vez a cada 24 horas (86400000 ms)
+              if (diffMs < 24 * 60 * 60 * 1000) {
+                shouldUpdateLogin = false;
+              }
+            }
+          } catch (e) {
+            console.warn("Erro ao ler ultimoLogin do perfil:", e);
+          }
+        }
+
+        if (shouldUpdateLogin) {
+          await updateDoc(doc(db, "users", firebaseUser.uid), { ultimoLogin: serverTimestamp() }).catch(() => undefined);
+        }
         setTimeout(refreshDatabaseStates, 100);
       } catch (error) {
         console.error(error);

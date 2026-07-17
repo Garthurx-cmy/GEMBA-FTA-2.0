@@ -9,10 +9,48 @@ import {
 } from "../types";
 import { auth, db, hasFirebase } from "./firebase";
 import {
-  collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot,
-  serverTimestamp, getDocs, query, where, writeBatch,
+  collection, doc,
+  setDoc as fbSetDoc,
+  updateDoc as fbUpdateDoc,
+  deleteDoc as fbDeleteDoc,
+  onSnapshot,
+  serverTimestamp, getDocs, query, where,
+  writeBatch as fbWriteBatch,
   orderBy, limit, startAfter, getDoc
 } from "firebase/firestore";
+
+// Trace helper for writes in development
+const setDoc = async (ref: any, data: any, options?: any) => {
+  if (process.env.NODE_ENV !== "production") {
+    const path = ref && typeof ref.path === "string" ? ref.path : "unknown-path";
+    console.trace("[FIRESTORE WRITE]", path, "setDoc", data);
+  }
+  return fbSetDoc(ref, data, options);
+};
+
+const updateDoc = async (ref: any, data: any) => {
+  if (process.env.NODE_ENV !== "production") {
+    const path = ref && typeof ref.path === "string" ? ref.path : "unknown-path";
+    console.trace("[FIRESTORE WRITE]", path, "updateDoc", data);
+  }
+  return fbUpdateDoc(ref, data);
+};
+
+const deleteDoc = async (ref: any) => {
+  if (process.env.NODE_ENV !== "production") {
+    const path = ref && typeof ref.path === "string" ? ref.path : "unknown-path";
+    console.trace("[FIRESTORE WRITE]", path, "deleteDoc");
+  }
+  return fbDeleteDoc(ref);
+};
+
+const writeBatch = (firestoreInstance: any) => {
+  const batch = fbWriteBatch(firestoreInstance);
+  if (process.env.NODE_ENV !== "production") {
+    console.trace("[FIRESTORE WRITE] Batch created");
+  }
+  return batch;
+};
 
 const DEFAULT_CONFIG: SystemConfig = {
   logoUrl: "/logo-fta.png",

@@ -58,15 +58,29 @@ Ao logar ou voltar para uma aba visível, o sistema executa o método `dbService
 
 ---
 
-## 4. Auditoria de Gravações e Prevenção de Loops
+## 4. Eliminação de Gravações Automáticas e Controle de Login
 
-Verificamos minuciosamente todas as rotas de persistência de escrita do sistema:
-- **Ausência total de timers de sincronização**: Não há nenhum uso de `setInterval` ou loops de escrita assíncrona.
-- **Gravações baseadas estritamente em ações intencionais do usuário**:
-  - `saveInspection`: Chamado apenas ao submeter lançamentos ou alterações de formulário.
-  - `deleteInspection`: Acionado apenas após confirmação explícita de remoção de item.
-  - `saveConfig`: Acionado somente pelo menu administrativo de configurações globais.
-  - `addAuditLog`: Grava uma linha de log de auditoria no Firestore em resposta direta a ações-chave (Login, Salvar, Excluir), sem redundância.
+Realizamos um pente-fino minucioso em toda a base de código para banir e mitigar qualquer gravação indesejada em ciclo:
+1. **Controle de Login (Rate-limiting `ultimoLogin`)**:
+   - **Antes**: A gravação do campo `ultimoLogin` no perfil do usuário ocorria incondicionalmente em cada acionamento do listener `onAuthStateChanged`, incluindo reloads, logins, HMR (Hot Module Replacement) e retornos de visibilidade da página.
+   - **Agora**: Implementamos uma verificação rigorosa baseada na leitura prévia do perfil salvo. O campo `ultimoLogin` é atualizado **estritamente no máximo uma vez a cada 24 horas**. Se a última data gravada for inferior a 24 horas, o sistema pula a escrita. Nunca realizamos gravações automáticas ao alternar abas, reconectar listeners, ou em eventos de visibilidade.
+2. **Prevenção de Loops no Dashboard e Farol**:
+   - Nenhuma notificação ou log de auditoria é re-criado ou gravado ao carregar ou recalcular dados do Dashboard, Farol ou Rankings. Todas as visualizações de metas e alertas visuais são processadas estritamente em memória do lado do cliente.
+3. **Logs de Auditoria Estritos**:
+   - O método `addAuditLog` e as inserções de log na coleção `auditLogs` estão estritamente vinculados a ações CRUD físicas do usuário: criar inspeção, atualizar inspeção, excluir inspeção e atualizações manuais administrativas. Gravações por leitura ou navegação estão completamente banidas.
+
+---
+
+## 5. Instrumentação de Diagnóstico (Console Trace)
+
+Para garantir total controle sobre qualquer escrita futura e facilitar a identificação de eventuais novos focos de consumo, desenvolvemos wrappers de instrumentação em desenvolvimento no topo de `src/App.tsx` e `src/services/db.ts`:
+- **Operações Monitoradas**: `setDoc`, `updateDoc`, `deleteDoc` e `writeBatch` foram redefinidos localmente como interceptores.
+- **Rastreabilidade**: Em ambiente de desenvolvimento (`process.env.NODE_ENV !== "production"`), qualquer tentativa de escrita chama:
+  ```typescript
+  console.trace("[FIRESTORE WRITE]", path, operacao, dados);
+  ```
+  Isso gera um rastreamento de pilha completo (Stack Trace) no console do desenvolvedor, revelando o arquivo, método e linha exata que originou a operação.
+- **Sustentabilidade**: Esses diagnósticos rodam estritamente localmente no console, evitando qualquer gravação colateral de telemetria no banco de dados.
 
 ---
 
@@ -75,7 +89,9 @@ Verificamos minuciosamente todas as rotas de persistência de escrita do sistema
 Com essas otimizações aplicadas de forma integrada, o **GEMBA FTA** protege as cotas do Firestore de forma impecável:
 1. Limita listeners em tempo real por contexto de uso da página.
 2. Suspende todas as conexões em tempo real ao ocultar a janela, bloquear o telefone ou ficar offline.
-3. Garante que os dados antigos permaneçam na memória para uma experiência de usuário instantânea e sem engasgos visual ("Sincronizando...").
+3. Garante que os dados antigos permaneçam na memória para uma experiência de usuário instantânea e sem engasgos visuais ("Sincronizando...").
 4. Evita gravações de status de presença, mantendo as cotas de escrita intactas.
+5. Limita escritas de login para no máximo uma vez a cada 24 horas.
+6. Instrumenta as escritas de desenvolvimento, garantindo transparência operacional contínua.
 
 A aplicação está **completamente pronta, sustentável e otimizada** para operar com custo mínimo no plano Blaze ou totalmente gratuita dentro do Spark.
