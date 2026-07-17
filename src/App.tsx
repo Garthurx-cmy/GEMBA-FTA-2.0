@@ -56,6 +56,11 @@ export default function App() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
+  // --- VISIBILITY & SYNC STATES ---
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isVisible, setIsVisible] = useState(document.visibilityState === "visible");
+  const [isSyncing, setIsSyncing] = useState(false);
+
   // --- SPECIAL INTERACTIVE STATES ---
   const [editingInspection, setEditingInspection] = useState<Inspection | null>(null);
   const [reportSelectedInspectionId, setReportSelectedInspectionId] = useState<string | null>(null);
@@ -113,6 +118,86 @@ export default function App() {
     return () => window.removeEventListener("gemba_fta_db_update", handleDbUpdate);
   }, []);
 
+  // Centralized Visibility, Online, and Tab Page event listeners
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsVisible(document.visibilityState === "visible");
+    };
+
+    const handlePageShow = () => {
+      setIsVisible(true);
+    };
+
+    const handlePageHide = () => {
+      setIsVisible(false);
+    };
+
+    const handleOnline = () => {
+      setIsOnline(true);
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    // HMR Dispose listener for development
+    if ((import.meta as any).hot) {
+      (import.meta as any).hot.dispose(() => {
+        dbService.stopSync(false);
+      });
+    }
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  // Centralized dynamic listener synchronization manager
+  useEffect(() => {
+    if (!currentUser) {
+      dbService.stopSync(true); // Logout: clear cache & cancel listeners
+      setIsSyncing(false);
+      return;
+    }
+
+    if (!isVisible || !isOnline) {
+      dbService.stopSync(false); // Hidden/Offline: cancel listeners, keep cache
+      setIsSyncing(false);
+      return;
+    }
+
+    // visible + online + authenticated
+    setIsSyncing(true);
+    dbService.stopSync(false); // Stop prior tab snapshot handlers to prevent duplicates
+
+    // Preload metadata once in the background to avoid displaying placeholder names or empty selects
+    dbService.preloadMetadata().then(() => {
+      refreshDatabaseStates();
+    });
+
+    dbService.startSync(currentUser, activeTab);
+    refreshDatabaseStates();
+
+    // Discrete brief loading feedback
+    const syncTimer = setTimeout(() => {
+      setIsSyncing(false);
+    }, 1200);
+
+    return () => {
+      clearTimeout(syncTimer);
+    };
+  }, [currentUser, activeTab, isVisible, isOnline]);
+
   // Firebase Authentication is the only session source. Firestore listeners start
   // only after authentication, avoiding permission errors on the login screen.
   useEffect(() => {
@@ -125,7 +210,7 @@ export default function App() {
       setAuthLoading(true);
       try {
         if (!firebaseUser) {
-          dbService.stopSync();
+          dbService.stopSync(true);
           setCurrentUser(null);
           setAuthLoading(false);
           return;
@@ -168,7 +253,6 @@ export default function App() {
           return;
         }
         setCurrentUser(profile);
-        dbService.startSync(profile);
         await updateDoc(doc(db, "users", firebaseUser.uid), { ultimoLogin: serverTimestamp() }).catch(() => undefined);
         setTimeout(refreshDatabaseStates, 100);
       } catch (error) {
@@ -435,7 +519,7 @@ export default function App() {
         currentUser={currentUser}
         onLogout={async () => {
           await signOut(auth);
-          dbService.stopSync();
+          dbService.stopSync(true);
           setCurrentUser(null);
           setActiveTab("dashboard");
           triggerAlert("Sessão encerrada com sucesso.", "success");
@@ -461,6 +545,12 @@ export default function App() {
                 SISTEMA DE GESTÃO GEMBA
               </span>
             </div>
+            {isSyncing && (
+              <div className="ml-2.5 flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-100 rounded-full animate-pulse">
+                <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
+                <span className="text-[9px] text-blue-600 font-extrabold tracking-wider uppercase">Sincronizando...</span>
+              </div>
+            )}
           </div>
 
           {/* Centered Global Search Input */}

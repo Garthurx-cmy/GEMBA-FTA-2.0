@@ -1,6 +1,6 @@
 # Relatório de Auditoria de Consumo do Firestore
 
-Este documento apresenta a auditoria de consumo e otimização do Firestore para o sistema **GEMBA FTA**, garantindo que a aplicação opere de maneira sustentável dentro dos limites de cota do plano gratuito **Firebase Spark**.
+Este documento apresenta a auditoria de consumo e otimização do Firestore para o sistema **GEMBA FTA**, garantindo que a aplicação opere de maneira sustentável, com baixo custo e altíssimo desempenho dentro do plano **Firebase Spark/Blaze**.
 
 ---
 
@@ -12,61 +12,70 @@ Anteriormente, o sistema realizou milhares de leituras e gravações em um curto
 - **8,3 mil conexões em tempo real**
 
 ### Identificação de Gargalos:
-1. **Listeners Globais Ilimitados**: O serviço `DBService` registrava listeners em tempo real (`onSnapshot`) sobre toda a coleção de `inspections` e `notifications`. Conforme o banco crescia, cada nova inspeção adicionada acionava downloads completos do histórico de todos os usuários conectados.
+1. **Listeners Globais Ilimitados**: O serviço `DBService` registrava listeners em tempo real (`onSnapshot`) sobre todas as coleções simultaneamente (`inspections`, `supervisors`, `areas`, `contracts`, `notifications`, `users`, `authorized_emails`), independente de qual página o usuário estivesse visualizando.
 2. **Consultas sem Limites**: Telas de Histórico e Relatórios carregavam em memória todas as inspeções do banco de dados, resultando em consumo volumoso a cada acesso.
 3. **Persistência Redundante**: Eventos de renderização podiam recriar ouvintes devido a dependências instáveis ou loops de atualizações de estados em React.
 
 ---
 
-## 2. Plano de Redução e Estrutura de Listeners (Depois)
+## 2. Suspensão Inteligente de Conexões (Page Visibility)
 
-Implementamos uma arquitetura centrada em **Consultas sob Demanda** e **Sincronização Limitada**, reduzindo drasticamente o consumo de banda e leitura.
+Implementamos um controle de suspensão inteligente em tempo real centralizado em `App.tsx` para garantir que conexões ativas com o Firestore existam **apenas quando estritamente necessário**.
 
-### Quadro Geral de Listeners:
-
-| Recurso / Coleção | Tipo de Listener (Antes) | Tipo de Sincronização (Depois) | Limite / Filtro | Justificativa |
-| :--- | :--- | :--- | :--- | :--- |
-| **inspections** | `onSnapshot` (Ilimitado) | `onSnapshot` (Limitado) | `limit(50)` ordenado por Data | Sincroniza em tempo real apenas as 50 inspeções mais recentes para alimentar o Painel Principal (Dashboard), Metas e Farol. |
-| **notifications** | `onSnapshot` (Ilimitado) | `onSnapshot` (Limitado) | `limit(20)` ordenado por Data | Mantém o centro de notificações atualizado em tempo real limitado às últimas 20 mensagens. |
-| **Histórico** | `onSnapshot` (Ilimitado) | Consulta sob Demanda (`getDocs`) | `limit(25)` + `startAfter` | Sem listeners persistentes. Busca em lote exatamente de 25 em 25 registros usando ponteiros de cursor. |
-| **Relatórios** | `onSnapshot` (Ilimitado) | Consulta sob Demanda (`getDocs`) | `limit(100)` sob filtros | Sincronização inativa por padrão. Busca documentos no banco apenas quando filtros estruturais são aplicados. |
-| **supervisors** | `onSnapshot` | `onSnapshot` | Sem limite (tamanho desprezível) | Mantido em tempo real para sincronizar metadados ativos de supervisores. |
-| **areas** | `onSnapshot` | `onSnapshot` | Sem limite (tamanho desprezível) | Mantido em tempo real para sincronizar metadados ativos de localidades. |
-| **contracts** | `onSnapshot` | `onSnapshot` | Sem limite (tamanho desprezível) | Mantido em tempo real para sincronizar metadados de contratos. |
-
----
-
-## 3. Otimizações de Desempenho e Recursos Implementados
-
-### 1. Paginação Inteligente no Histórico (`HistoricoView`)
-* Implementamos paginação cursorizada com `startAfter` e `limit(25)`.
-* O Histórico agora faz consultas parciais e sequenciais, reduzindo as leituras ao mínimo essencial.
-* Adicionamos botões de navegação **Anterior** e **Próximo** perfeitamente estilizados de acordo com a identidade visual do sistema.
-* Sincronização de Estado: O componente escuta o evento global `"gemba_fta_db_update"` do app para disparar recargas sob demanda somente quando ocorrerem mutações locais (criação, edição ou exclusão), garantindo dados sempre atualizados sem dependência de ouvintes perpétuos.
-
-### 2. Filtro sob Demanda nos Relatórios (`RelatoriosView`)
-* Reduzimos a carga inicial da aba de relatórios para apenas os 50 registros mais recentes em cache.
-* Conexão Inteligente: Assim que qualquer filtro (Supervisor, Área, Tipo, Severidade, etc.) é selecionado, um efeito com **Debounce de 350ms** realiza uma consulta direcionada ao Firestore, baixando apenas os documentos correspondentes.
-* Para visualização de relatórios individuais via links externos ou atalhos do dashboard, criamos a busca focada de único documento por ID (`dbService.getInspectionById`), consumindo **exatamente 1 leitura**.
-
-### 3. Mecanismo de Fallback Seguro de Índices
-* Consultas combinadas com ordenação no Firestore requerem a criação manual de índices compostos no console do Firebase. 
-* Para mitigar travamentos ou interrupções caso o console não tenha esses índices criados no plano Spark, implementamos um **mecanismo de fallback silencioso**. Em caso de falha de índice composto, o sistema busca os dados ordenados por data e executa os filtros estruturais em memória, garantindo robustez extrema e experiência de usuário ininterrupta.
+### Comportamento de Suspensão:
+* **Gatilhos de Suspensão**:
+  * Navegador minimizado ou aba colocada em segundo plano (`document.visibilityState === "hidden"`).
+  * Tela do celular bloqueada ou outro aplicativo aberto (`pagehide`).
+  * Dispositivo offline (`navigator.onLine === false`).
+  * Usuário desconectado (logout).
+* **Ações ao Suspender**:
+  * Executa `dbService.stopSync(false)`.
+  * Cancela imediatamente todos os ouvintes `onSnapshot` ativos.
+  * **Sem perda de UX**: Os dados carregados permanecem visíveis em cache na tela enquanto suspenso, evitando oscilações visuais.
+  * **Zero Gravações**: Nenhuma gravação de status (`lastSeen`, `online`, etc.) é realizada no Firestore para evitar custos colaterais.
+* **Ações ao Reativar**:
+  * Confirmada a autenticação, visibilidade e status online, reativa os ouvintes.
+  * Exibe um indicador discreto **"Sincronizando..."** no cabeçalho durante a transição (1,2s de fade/pulse).
+  * Atualiza os dados de forma fluida, sem recarregar a página e sem duplicar notificações.
 
 ---
 
-## 4. Auditoria de Gravações e Ciclos de Escrita
+## 3. Listeners Ativos por Página (Sob Demanda)
 
-Verificamos minuciosamente todos os caminhos de persistência do sistema:
-- **Zero loops de escrita**: Não existem loops infinitos ou timers recorrentes sincronizando dados no banco.
-- **Gravações baseadas estritamente em ações reais**:
-  - `saveInspection`: Chamado apenas quando o usuário preenche e salva o formulário de lançamento ou edição.
-  - `deleteInspection`: Acionado apenas via confirmação de exclusão pelo usuário.
-  - `saveConfig`: Acionado apenas ao alterar as configurações globais do sistema.
-  - `addAuditLog`: Registra uma única linha de log de auditoria no Firestore ao salvar/remover documentos ou logar no sistema.
+Agora os ouvintes `onSnapshot` são ativados dinamicamente com base na aba ativa do usuário, mantendo apenas o mínimo indispensável conectado:
+
+| Aba / Tela Ativa | Listeners Ativos (`onSnapshot`) | Consultas Unidirecionais (`getDocs` / `getDoc`) | Detalhes e Justificativa |
+| :--- | :--- | :--- | :--- |
+| **Painel Principal / Dashboard** | **3 Listeners**: `settings/config` (configurações), `deleted_names` (nomes deletados), `notifications` (últimas 20 notificações). <br><br> *Se ativo, adiciona mais 1*: `inspections` (últimas 50). | **Nenhuma** | Carrega dados principais em tempo real de forma restrita e leve. Reutilizado diretamente por Farol e Ranking. |
+| **Farol & Ranking** | **3 Listeners**: Reutiliza exatamente os mesmos ouvintes do Dashboard. | **Nenhuma** | **Zero conexões extras**. Compartilha o cache do Dashboard para cálculo de KPIs e gráficos. |
+| **Histórico** | **3 Listeners**: `settings/config`, `deleted_names`, `notifications`. <br><br> *Se ativo, adiciona mais 3*: `supervisors`, `areas`, `contracts`. | **Busca paginada (`getDocs`)** com limite de 25 registros sob demanda. | Os dados dos registros históricos são lidos estritamente em lotes sob demanda, evitando carregar o banco completo. |
+| **Relatórios** | **3 Listeners**: `settings/config`, `deleted_names`, `notifications`. <br><br> *Se ativo, adiciona mais 3*: `supervisors`, `areas`, `contracts`. | **Busca filtrada (`getDocs`)** sob demanda (debounce de 350ms) ou por ID único (`getDoc`). | Sem listeners de inspeções permanentes. Apenas busca quando filtros são aplicados ou ao ler relatório detalhado por ID. |
+| **Lançar Inspeção** | **3 Listeners**: `settings/config`, `deleted_names`, `notifications`. <br><br> *Se ativo, adiciona mais 3*: `supervisors`, `areas`, `contracts`. | **Nenhuma** | Ouvintes sobre coleções auxiliares fornecem dados sempre atualizados para os campos de seleção do formulário. |
+| **Configurações** | **3 Listeners**: `settings/config`, `deleted_names`, `notifications`. <br><br> *Se ativo, adiciona mais 5*: `supervisors`, `areas`, `contracts`. Se Admin: `users`, `authorized_emails`. | **Nenhuma** | Sincroniza tabelas administrativas estritamente enquanto a página estiver aberta e o usuário tiver permissão. |
+
+### Pré-carregamento Inteligente de Metadados:
+Ao logar ou voltar para uma aba visível, o sistema executa o método `dbService.preloadMetadata()` em segundo plano para puxar dados essenciais (`config`, `deleted_names`, `supervisors`, `areas`, `contracts`) de forma assíncrona uma única vez via `getDocs` caso os caches locais estejam vazios. Isso evita delays visuais nos formulários e listagens antes que os listeners específicos sejam reconectados.
+
+---
+
+## 4. Auditoria de Gravações e Prevenção de Loops
+
+Verificamos minuciosamente todas as rotas de persistência de escrita do sistema:
+- **Ausência total de timers de sincronização**: Não há nenhum uso de `setInterval` ou loops de escrita assíncrona.
+- **Gravações baseadas estritamente em ações intencionais do usuário**:
+  - `saveInspection`: Chamado apenas ao submeter lançamentos ou alterações de formulário.
+  - `deleteInspection`: Acionado apenas após confirmação explícita de remoção de item.
+  - `saveConfig`: Acionado somente pelo menu administrativo de configurações globais.
+  - `addAuditLog`: Grava uma linha de log de auditoria no Firestore em resposta direta a ações-chave (Login, Salvar, Excluir), sem redundância.
 
 ---
 
 ## Conclusão
 
-Com as otimizações implementadas, as leituras em tempo real foram restringidas de uma escala indefinida para um número estritamente fixo e controlado de ouvintes. As consultas volumosas foram substituídas por requisições sob demanda perfeitamente coordenadas. O sistema agora está **completamente pronto, leve e otimizado** para operar perfeitamente no plano gratuito **Firebase Spark**.
+Com essas otimizações aplicadas de forma integrada, o **GEMBA FTA** protege as cotas do Firestore de forma impecável:
+1. Limita listeners em tempo real por contexto de uso da página.
+2. Suspende todas as conexões em tempo real ao ocultar a janela, bloquear o telefone ou ficar offline.
+3. Garante que os dados antigos permaneçam na memória para uma experiência de usuário instantânea e sem engasgos visual ("Sincronizando...").
+4. Evita gravações de status de presença, mantendo as cotas de escrita intactas.
+
+A aplicação está **completamente pronta, sustentável e otimizada** para operar com custo mínimo no plano Blaze ou totalmente gratuita dentro do Spark.

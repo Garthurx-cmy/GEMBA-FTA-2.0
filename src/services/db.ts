@@ -47,8 +47,8 @@ class DBService {
   private notifications: AppNotification[] = [];
   private deletedNames: Record<string, string> = {};
   private authorizedEmails: AuthorizedEmail[] = [];
-  private unsubscribes: (() => void)[] = [];
-  private started = false;
+  private syncActive = false;
+  private unsubscribers: Array<() => void> = [];
 
   private convert(value: any): any {
     if (Array.isArray(value)) return value.map(v => this.convert(v));
@@ -63,49 +63,98 @@ class DBService {
     window.dispatchEvent(new CustomEvent("gemba_fta_db_update", { detail: { key } }));
   }
 
-  startSync(currentProfile?: UserProfile): void {
-    if (this.started || !hasFirebase || !db) return;
-    this.started = true;
-    const syncCollection = <T,>(name: string, setter: (items: T[]) => void, sort?: (a: T, b: T) => number, queryLimit?: number) => {
-      let q = collection(db, name) as any;
-      if (name === "inspections") {
-        q = query(collection(db, "inspections"), orderBy("data", "desc"), limit(queryLimit || 50));
-      } else if (name === "notifications") {
-        q = query(collection(db, "notifications"), orderBy("createdAt", "desc"), limit(queryLimit || 20));
-      }
-      this.unsubscribes.push(onSnapshot(q, snap => {
-        const list = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as T));
-        if (sort) list.sort(sort);
-        setter(list);
-        this.emit(name);
-      }, err => console.error(`Falha ao sincronizar ${name}:`, err)));
-    };
+  startSync(currentProfile?: UserProfile, activeTab?: string): void {
+    if (this.syncActive || !hasFirebase || !db) return;
+    this.syncActive = true;
 
-    this.unsubscribes.push(onSnapshot(doc(db, "settings", "config"), snap => {
+    const currentTab = activeTab || "dashboard";
+    const isAdmin = currentProfile?.perfil === "Desenvolvedor/Admin" || currentProfile?.perfil === "Administrador";
+
+    // 1. Settings (config) - always needed when active
+    this.unsubscribers.push(onSnapshot(doc(db, "settings", "config"), snap => {
       this.config = snap.exists() ? ({ ...DEFAULT_CONFIG, ...this.convert(snap.data()) } as SystemConfig) : DEFAULT_CONFIG;
       this.emit("config");
     }, err => console.error("Falha ao sincronizar configurações:", err)));
 
-    syncCollection<Inspection>("inspections", v => this.inspections = v, (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime(), 50);
-    syncCollection<Supervisor>("supervisors", v => this.supervisors = v);
-    syncCollection<Area>("areas", v => this.areas = v);
-    syncCollection<Contract>("contracts", v => this.contracts = v);
-    const isAdmin = currentProfile?.perfil === "Desenvolvedor/Admin" || currentProfile?.perfil === "Administrador";
-    if (isAdmin) syncCollection<UserProfile>("users", v => this.users = v);
-    syncCollection<AppNotification>("notifications", v => this.notifications = v, (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(), 20);
-    if (isAdmin) syncCollection<AuthorizedEmail>("authorized_emails", v => this.authorizedEmails = v);
-    this.unsubscribes.push(onSnapshot(collection(db, "deleted_names"), snap => {
+    // 2. Deleted Names - always needed to resolve deleted item labels
+    this.unsubscribers.push(onSnapshot(collection(db, "deleted_names"), snap => {
       this.deletedNames = Object.fromEntries(snap.docs.map(d => [d.id, d.data().name || "Registro removido"]));
       this.emit("deleted_names");
-    }));
+    }, err => console.error("Falha ao sincronizar nomes removidos:", err)));
+
+    // 3. Notifications - always needed for alert badge
+    this.unsubscribers.push(onSnapshot(query(collection(db, "notifications"), orderBy("createdAt", "desc"), limit(20)), snap => {
+      this.notifications = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as AppNotification));
+      this.emit("notifications");
+    }, err => console.error("Falha ao sincronizar notificações:", err)));
+
+    // 4. Page/Tab Specific Sourcing
+    if (currentTab === "dashboard" || currentTab === "farol" || currentTab === "ranking") {
+      // Dashboard needs inspections
+      this.unsubscribers.push(onSnapshot(query(collection(db, "inspections"), orderBy("data", "desc"), limit(50)), snap => {
+        this.inspections = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as Inspection));
+        this.emit("inspections");
+      }, err => console.error("Falha ao sincronizar inspeções do Dashboard:", err)));
+    } else if (currentTab === "historico" || currentTab === "relatorios" || currentTab === "lancar") {
+      // These pages need supervisors, areas, and contracts for selects and display
+      this.unsubscribers.push(onSnapshot(collection(db, "supervisors"), snap => {
+        this.supervisors = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as Supervisor));
+        this.emit("supervisors");
+      }, err => console.error("Falha ao sincronizar supervisores:", err)));
+
+      this.unsubscribers.push(onSnapshot(collection(db, "areas"), snap => {
+        this.areas = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as Area));
+        this.emit("areas");
+      }, err => console.error("Falha ao sincronizar áreas:", err)));
+
+      this.unsubscribers.push(onSnapshot(collection(db, "contracts"), snap => {
+        this.contracts = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as Contract));
+        this.emit("contracts");
+      }, err => console.error("Falha ao sincronizar contratos:", err)));
+    } else if (currentTab === "configuracoes") {
+      // Configuracoes page needs admin tables
+      this.unsubscribers.push(onSnapshot(collection(db, "supervisors"), snap => {
+        this.supervisors = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as Supervisor));
+        this.emit("supervisors");
+      }, err => console.error("Falha ao sincronizar supervisores:", err)));
+
+      this.unsubscribers.push(onSnapshot(collection(db, "areas"), snap => {
+        this.areas = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as Area));
+        this.emit("areas");
+      }, err => console.error("Falha ao sincronizar áreas:", err)));
+
+      this.unsubscribers.push(onSnapshot(collection(db, "contracts"), snap => {
+        this.contracts = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as Contract));
+        this.emit("contracts");
+      }, err => console.error("Falha ao sincronizar contratos:", err)));
+
+      if (isAdmin) {
+        this.unsubscribers.push(onSnapshot(collection(db, "users"), snap => {
+          this.users = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as UserProfile));
+          this.emit("users");
+        }, err => console.error("Falha ao sincronizar usuários:", err)));
+
+        this.unsubscribers.push(onSnapshot(collection(db, "authorized_emails"), snap => {
+          this.authorizedEmails = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as AuthorizedEmail));
+          this.emit("authorized_emails");
+        }, err => console.error("Falha ao sincronizar e-mails autorizados:", err)));
+      }
+    }
   }
 
-  stopSync(): void {
-    this.unsubscribes.forEach(u => u());
-    this.unsubscribes = [];
-    this.started = false;
-    this.inspections = []; this.supervisors = []; this.areas = []; this.contracts = [];
-    this.users = []; this.notifications = []; this.authorizedEmails = [];
+  stopSync(clearData: boolean = false): void {
+    this.unsubscribers.forEach(u => u());
+    this.unsubscribers = [];
+    this.syncActive = false;
+    if (clearData) {
+      this.inspections = [];
+      this.supervisors = [];
+      this.areas = [];
+      this.contracts = [];
+      this.users = [];
+      this.notifications = [];
+      this.authorizedEmails = [];
+    }
   }
 
   async getPaginatedInspections(options: {
@@ -246,6 +295,46 @@ class DBService {
       return { id: docSnap.id, ...this.convert(docSnap.data()) } as Inspection;
     }
     return null;
+  }
+
+  async preloadMetadata(): Promise<void> {
+    if (!hasFirebase || !db) return;
+    try {
+      // 1. Preload settings once
+      const configSnap = await getDoc(doc(db, "settings", "config"));
+      if (configSnap.exists()) {
+        this.config = { ...DEFAULT_CONFIG, ...this.convert(configSnap.data()) } as SystemConfig;
+        this.emit("config");
+      }
+
+      // 2. Preload deleted names once
+      const deletedSnap = await getDocs(collection(db, "deleted_names"));
+      this.deletedNames = Object.fromEntries(deletedSnap.docs.map(d => [d.id, d.data().name || "Registro removido"]));
+      this.emit("deleted_names");
+
+      // 3. Preload supervisors once if empty
+      if (this.supervisors.length === 0) {
+        const supervisorsSnap = await getDocs(collection(db, "supervisors"));
+        this.supervisors = supervisorsSnap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as Supervisor));
+        this.emit("supervisors");
+      }
+
+      // 4. Preload areas once if empty
+      if (this.areas.length === 0) {
+        const areasSnap = await getDocs(collection(db, "areas"));
+        this.areas = areasSnap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as Area));
+        this.emit("areas");
+      }
+
+      // 5. Preload contracts once if empty
+      if (this.contracts.length === 0) {
+        const contractsSnap = await getDocs(collection(db, "contracts"));
+        this.contracts = contractsSnap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as Contract));
+        this.emit("contracts");
+      }
+    } catch (err) {
+      console.warn("Falha ao pré-carregar metadados em segundo plano:", err);
+    }
   }
 
   getInspections = () => [...this.inspections];
