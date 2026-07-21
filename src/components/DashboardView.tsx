@@ -54,6 +54,21 @@ import {
   Tooltip as RechartsTooltip
 } from "recharts";
 
+const isJhonata = (sup?: Supervisor) => {
+  if (!sup) return false;
+  const email = String(sup.email || "").trim().toLowerCase();
+  const nome = String(sup.nome || "").toLowerCase();
+  const id = String(sup.id || "").toLowerCase();
+  return (
+    email === "j.santos@grupofta.com.br" ||
+    email === "jhonata.santos@grupofta.com.br" ||
+    email.startsWith("jhonata") ||
+    id.includes("j_santos") ||
+    id.includes("jhonata") ||
+    (nome.includes("jhonata") && (nome.includes("santos") || nome.includes("gonçalves") || nome.includes("goncalves")))
+  );
+};
+
 interface DashboardViewProps {
   inspections: Inspection[];
   supervisors: Supervisor[];
@@ -323,8 +338,14 @@ export default function DashboardView({
     const selectedSupervisor = activeSups.find(s => s.id === selectedSupervisorId);
     const typeBasedSupervisors = activeSups.filter(s => s.tipoMeta !== "quantitativa");
     const targetPerType = 7;
-    const weeklyGoal = (sup?: Supervisor) => sup?.metaSemanal ?? 7;
-    const monthlyGoal = (sup?: Supervisor) => sup?.metaMensal ?? 28;
+    const weeklyGoal = (sup?: Supervisor) => {
+      if (isJhonata(sup)) return 2;
+      return sup?.metaSemanal ?? 7;
+    };
+    const monthlyGoal = (sup?: Supervisor) => {
+      if (isJhonata(sup)) return 8;
+      return sup?.metaMensal ?? 28;
+    };
     const totalWeeklyTarget = selectedSupervisorId === "all"
       ? Math.max(activeSups.reduce((sum, sup) => sum + weeklyGoal(sup), 0), 1)
       : weeklyGoal(selectedSupervisor);
@@ -585,7 +606,7 @@ export default function DashboardView({
           (interdicaoCount >= 1 ? 1 : 0);
 
         // Weekly target
-        const weeklyTarget = sup.metaSemanal ?? (sup.unidade === "VLI" ? 7 : 4);
+        const weeklyTarget = isJhonata(sup) ? 2 : (sup.metaSemanal ?? (sup.unidade === "VLI" ? 7 : 4));
         const weeklyAchievedCount = sup.tipoMeta === "quantitativa"
           ? Math.min(supWeekInsps.length, weeklyTarget)
           : Math.min(typeBasedAchievedCount, weeklyTarget);

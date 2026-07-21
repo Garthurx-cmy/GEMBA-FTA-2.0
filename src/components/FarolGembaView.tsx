@@ -18,11 +18,12 @@ const normalizarTipo = (valor = '') =>
     .replace(/\s+/g, ' ');
 
 const isPresencaEmCampo = (inspecao: Inspection) => {
+  const insp = inspecao as any;
   const tipo = normalizarTipo(
-    inspecao.tipoLancamento ??
-    inspecao.tipo ??
-    inspecao.atividade ??
-    inspecao.categoria ??
+    insp.tipoLancamento ??
+    insp.tipo ??
+    insp.atividade ??
+    insp.categoria ??
     ''
   );
 
@@ -75,7 +76,23 @@ export default function FarolGembaView({
     return "Supervisor Vale";
   };
 
+  const isJhonata = (sup?: Supervisor) => {
+    if (!sup) return false;
+    const email = String(sup.email || "").trim().toLowerCase();
+    const nome = String(sup.nome || "").toLowerCase();
+    const id = String(sup.id || "").toLowerCase();
+    return (
+      email === "j.santos@grupofta.com.br" ||
+      email === "jhonata.santos@grupofta.com.br" ||
+      email.startsWith("jhonata") ||
+      id.includes("j_santos") ||
+      id.includes("jhonata") ||
+      (nome.includes("jhonata") && (nome.includes("santos") || nome.includes("gonçalves") || nome.includes("goncalves")))
+    );
+  };
+
   const getMetaMensal = (sup: Supervisor) => {
+    if (isJhonata(sup)) return 8;
     if (sup.metaMensal !== undefined) return sup.metaMensal;
     const role = getSupervisorRole(sup);
     if (role === "Supervisor VLI") return 28;

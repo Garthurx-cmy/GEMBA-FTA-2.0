@@ -208,6 +208,7 @@ class DBService {
       this.unsubscribers.push(onSnapshot(collection(db, "supervisors"), snap => {
         this.supervisors = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as Supervisor));
         this.emit("supervisors");
+        this.checkAndUpdateJhonataMeta();
       }, err => console.error("Falha ao sincronizar supervisores:", err)));
 
       this.unsubscribers.push(onSnapshot(collection(db, "areas"), snap => {
@@ -224,6 +225,7 @@ class DBService {
       this.unsubscribers.push(onSnapshot(collection(db, "supervisors"), snap => {
         this.supervisors = snap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as Supervisor));
         this.emit("supervisors");
+        this.checkAndUpdateJhonataMeta();
       }, err => console.error("Falha ao sincronizar supervisores:", err)));
 
       this.unsubscribers.push(onSnapshot(collection(db, "areas"), snap => {
@@ -428,6 +430,7 @@ class DBService {
         const supervisorsSnap = await getDocs(collection(db, "supervisors"));
         this.supervisors = supervisorsSnap.docs.map(d => ({ id: d.id, ...this.convert(d.data()) } as Supervisor));
         this.emit("supervisors");
+        this.checkAndUpdateJhonataMeta();
       }
 
       // 4. Preload areas once if empty
@@ -450,7 +453,18 @@ class DBService {
   }
 
   getInspections = () => [...this.inspections];
-  getSupervisors = () => [...this.supervisors];
+  getSupervisors = () => {
+    return this.supervisors.map(sup => {
+      if (this.isJhonata(sup)) {
+        return {
+          ...sup,
+          metaSemanal: 2,
+          metaMensal: 8
+        };
+      }
+      return sup;
+    });
+  };
   getAreas = () => [...this.areas];
   getContracts = () => [...this.contracts];
   getUsers = () => [...this.users];
@@ -632,6 +646,40 @@ class DBService {
       result[rule.col] = removed;
     }
     return result;
+  }
+
+  private isJhonata(sup?: any): boolean {
+    if (!sup) return false;
+    const email = String(sup.email || "").trim().toLowerCase();
+    const nome = String(sup.nome || "").toLowerCase();
+    const id = String(sup.id || "").toLowerCase();
+    return (
+      email === "j.santos@grupofta.com.br" ||
+      email === "jhonata.santos@grupofta.com.br" ||
+      email.startsWith("jhonata") ||
+      id.includes("j_santos") ||
+      id.includes("jhonata") ||
+      (nome.includes("jhonata") && (nome.includes("santos") || nome.includes("gonçalves") || nome.includes("goncalves")))
+    );
+  }
+
+  private checkAndUpdateJhonataMeta() {
+    if (!hasFirebase || !db) return;
+    const jhonataSup = this.supervisors.find(s => this.isJhonata(s));
+    if (jhonataSup) {
+      if (jhonataSup.metaSemanal !== 2 || jhonataSup.metaMensal !== 8) {
+        console.log("Background Sync: Jhonata's Firestore document targets are out of sync. Updating to weekly=2, monthly=8...");
+        const ref = doc(db, "supervisors", jhonataSup.id);
+        setDoc(ref, {
+          metaSemanal: 2,
+          metaMensal: 8
+        }, { merge: true }).then(() => {
+          console.log("Background Sync: Jhonata's supervisor targets updated successfully in Firestore.");
+        }).catch(err => {
+          console.warn("Background Sync: Could not write Jhonata's meta update to Firestore (expected if current user isn't Admin):", err);
+        });
+      }
+    }
   }
 }
 

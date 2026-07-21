@@ -39,7 +39,27 @@ export const getInspectionScore = (inspection: Inspection) => {
   return potentialScore + (inspection.status === InspectionStatus.CONCLUIDO ? 2 : 0);
 };
 
-export const getSupervisorTargets = (supervisor: Supervisor) => ({
-  weekly: supervisor.metaSemanal ?? (supervisor.unidade === "VLI" ? 7 : 4),
-  monthly: supervisor.metaMensal ?? (supervisor.unidade === "VLI" ? 28 : 16)
-});
+export const getSupervisorTargets = (supervisor: Supervisor) => {
+  const email = String(supervisor.email || "").trim().toLowerCase();
+  const nome = String(supervisor.nome || "").toLowerCase();
+  const id = String(supervisor.id || "").toLowerCase();
+
+  if (
+    email === "j.santos@grupofta.com.br" ||
+    email === "jhonata.santos@grupofta.com.br" ||
+    email.startsWith("jhonata") ||
+    id.includes("j_santos") ||
+    id.includes("jhonata") ||
+    (nome.includes("jhonata") && (nome.includes("santos") || nome.includes("gonçalves") || nome.includes("goncalves")))
+  ) {
+    return {
+      weekly: 2,
+      monthly: 8
+    };
+  }
+
+  return {
+    weekly: supervisor.metaSemanal ?? (supervisor.unidade === "VLI" ? 7 : 4),
+    monthly: supervisor.metaMensal ?? (supervisor.unidade === "VLI" ? 28 : 16)
+  };
+};
