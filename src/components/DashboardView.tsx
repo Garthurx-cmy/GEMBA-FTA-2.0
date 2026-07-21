@@ -267,6 +267,7 @@ export default function DashboardView({
     const desviosEstruturais = filteredInspections.filter((i) => getTipoLancamento(i.atividade, i.tipo) === "Desvio Estrutural").length;
     const notificacoes = filteredInspections.filter((i) => getTipoLancamento(i.atividade, i.tipo) === "Notificação").length;
     const interdicoes = filteredInspections.filter((i) => getTipoLancamento(i.atividade, i.tipo) === "Interdição").length;
+    const presenca = filteredInspections.filter((i) => getTipoLancamento(i.atividade, i.tipo) === "Presença em Campo").length;
     const criticos = filteredInspections.filter((i) => i.potencial === Potential.CRITICO).length;
 
     // Supervisor Destaque da Semana math (Most inspections in this current filtered list)
@@ -296,6 +297,7 @@ export default function DashboardView({
       desviosEstruturais,
       notificacoes,
       interdicoes,
+      presenca,
       criticos,
       highlightSupervisor,
       highlightCount: maxCount
@@ -1577,7 +1579,7 @@ export default function DashboardView({
             Totalizações de Lançamentos Acumulados
           </h3>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 shrink-0">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2.5 shrink-0">
         {/* Total Inspeções */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-100 border-l-4 border-l-[#0B2E59] p-3 flex flex-col justify-between hover:shadow-md transition-all">
           <div className="space-y-0.5">
@@ -1623,6 +1625,18 @@ export default function DashboardView({
           <div className="flex items-center justify-between mt-1 pt-1 border-t border-gray-50">
             <span className="text-[9px] text-gray-500 font-semibold truncate">Levantamentos</span>
             <span className="text-[10px]">🔍</span>
+          </div>
+        </div>
+
+        {/* Presença em Campo */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 border-l-4 border-l-teal-600 p-3 flex flex-col justify-between hover:shadow-md transition-all">
+          <div className="space-y-0.5">
+            <p className="text-[9px] uppercase font-extrabold text-gray-400 tracking-wider">🚶 PRESENÇA</p>
+            <h3 className="text-lg font-black text-teal-700 leading-tight">{indicators.presenca}</h3>
+          </div>
+          <div className="flex items-center justify-between mt-1 pt-1 border-t border-gray-50">
+            <span className="text-[9px] text-gray-500 font-semibold truncate">Presença em Campo</span>
+            <span className="text-[10px]">🚶</span>
           </div>
         </div>
 
