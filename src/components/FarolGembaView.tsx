@@ -8,6 +8,27 @@ import {
 } from "../utils/operational";
 import { getTipoLancamento } from "../types";
 
+const normalizarTipo = (valor = '') =>
+  String(valor)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ');
+
+const isPresencaEmCampo = (inspecao: Inspection) => {
+  const tipo = normalizarTipo(
+    inspecao.tipoLancamento ??
+    inspecao.tipo ??
+    inspecao.atividade ??
+    inspecao.categoria ??
+    ''
+  );
+
+  return tipo === 'presenca em campo';
+};
+
 interface FarolGembaViewProps {
   inspections: Inspection[];
   supervisors: Supervisor[];
@@ -97,8 +118,8 @@ export default function FarolGembaView({
         const notificacao = ownInsps.filter((i) => getTipoLancamento(i.atividade, i.tipo) === "Notificação").length;
         const interdicao = ownInsps.filter((i) => getTipoLancamento(i.atividade, i.tipo) === "Interdição").length;
 
-        // Presenca em campo column includes dial + comportamental + estrutural + direct
-        const presencaEmCampo = dial + comportamental + estrutural + directPresenca;
+        // Presenca em campo column only counts actual "Presença em Campo" inspections
+        const presencaEmCampo = ownInsps.filter(isPresencaEmCampo).length;
 
         // Total registered inspections
         const totalInspecoes = ownInsps.length;
