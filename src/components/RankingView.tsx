@@ -2,12 +2,14 @@ import React, { useMemo } from "react";
 import { Award, CalendarDays, CheckCircle, Clock, Radio, ShieldAlert, Trophy } from "lucide-react";
 import { Inspection, InspectionStatus, Potential, Supervisor, getTipoLancamento } from "../types";
 import {
-  formatOperationalDate,
   getInspectionScore,
-  getOperationalWeek,
   getSupervisorTargets,
   inspectionDate
 } from "../utils/operational";
+import {
+  getOperationalWeek,
+  formatOperationalWeekLabel
+} from "../utils/operationalWeek";
 
 interface RankingViewProps {
   inspections: Inspection[];
@@ -15,7 +17,7 @@ interface RankingViewProps {
 }
 
 export default function RankingView({ inspections, supervisors }: RankingViewProps) {
-  const { start, end } = getOperationalWeek();
+  const { start, end } = getOperationalWeek(new Date());
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
@@ -67,7 +69,7 @@ export default function RankingView({ inspections, supervisors }: RankingViewPro
         </div>
         <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-2.5">
           <span className="text-[9px] uppercase tracking-widest font-black text-[#F58220]">Semana Operacional</span>
-          <div className="flex items-center gap-2 text-xs font-extrabold text-[#0B2E59]"><CalendarDays size={14} /> {formatOperationalDate(start)} até {formatOperationalDate(end)}</div>
+          <div className="flex items-center gap-2 text-xs font-extrabold text-[#0B2E59]"><CalendarDays size={14} /> {formatOperationalWeekLabel({ start, end })}</div>
         </div>
       </div>
 

@@ -38,6 +38,21 @@ import {
 } from "lucide-react";
 import FarolGembaView from "./FarolGembaView";
 import ResolvedImage from "./ResolvedImage";
+import { getInspectionScore } from "../utils/operational";
+import {
+  getOperationalWeek,
+  normalizeInspectionDate,
+  formatOperationalWeekLabel
+} from "../utils/operationalWeek";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area as RechartsArea,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip
+} from "recharts";
 
 interface DashboardViewProps {
   inspections: Inspection[];
@@ -101,6 +116,7 @@ export default function DashboardView({
   const [selectedAreaId, setSelectedAreaId] = useState("all");
   const [selectedTipo, setSelectedTipo] = useState("all");
   const [selectedPotencial, setSelectedPotencial] = useState("all");
+  const [selectedOperationalWeekDate, setSelectedOperationalWeekDate] = useState<string>("");
 
   const resetFilters = () => {
     setTimeframe("all");
@@ -110,7 +126,25 @@ export default function DashboardView({
     setSelectedAreaId("all");
     setSelectedTipo("all");
     setSelectedPotencial("all");
+    setSelectedOperationalWeekDate("");
   };
+
+  // --- SELECTED OPERATIONAL WEEK RANGE ---
+  const activeOperationalWeek = useMemo(() => {
+    if (timeframe === "personalizado" && startDate && endDate) {
+      const s = normalizeInspectionDate(startDate);
+      const e = normalizeInspectionDate(endDate);
+      s.setHours(0, 0, 0, 0);
+      e.setHours(23, 59, 59, 999);
+      return { start: s, end: e };
+    } else if (timeframe === "personalizado" && startDate) {
+      return getOperationalWeek(startDate);
+    } else if (timeframe === "semanal" && selectedOperationalWeekDate) {
+      return getOperationalWeek(selectedOperationalWeekDate);
+    } else {
+      return getOperationalWeek(new Date());
+    }
+  }, [timeframe, startDate, endDate, selectedOperationalWeekDate]);
 
   // --- FILTERED INSPECTIONS ---
   const filteredInspections = useMemo(() => {
@@ -126,9 +160,8 @@ export default function DashboardView({
         todayEnd.setHours(23, 59, 59, 999);
         if (itemDate < todayStart || itemDate > todayEnd) return false;
       } else if (timeframe === "semanal") {
-        const startOfWeek = new Date("2026-07-09T00:00:00");
-        const endOfWeek = new Date("2026-07-16T23:59:59.999");
-        if (itemDate < startOfWeek || itemDate > endOfWeek) return false;
+        const { start, end } = activeOperationalWeek;
+        if (itemDate < start || itemDate > end) return false;
       } else if (timeframe === "mensal") {
         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
         startOfMonth.setHours(0, 0, 0, 0);
@@ -168,7 +201,16 @@ export default function DashboardView({
 
       return true;
     });
-  }, [inspections, timeframe, startDate, endDate, selectedSupervisorId, selectedAreaId, selectedTipo, selectedPotencial]);
+  }, [inspections, timeframe, activeOperationalWeek, startDate, endDate, selectedSupervisorId, selectedAreaId, selectedTipo, selectedPotencial]);
+
+  // --- CENTRALIZED WEEKLY INSPECTIONS FOR MULTIPLE COMPONENTS ---
+  const weeklyInspections = useMemo(() => {
+    const { start, end } = activeOperationalWeek;
+    return filteredInspections.filter((item) => {
+      const itemDate = new Date(`${item.data}T12:00:00`);
+      return itemDate >= start && itemDate <= end;
+    });
+  }, [filteredInspections, activeOperationalWeek]);
 
   const isDashboardFiltered = useMemo(() => {
     return selectedAreaId !== "all" || selectedTipo !== "all" || selectedPotencial !== "all" || timeframe !== "all";
@@ -269,8 +311,6 @@ export default function DashboardView({
   // --- WEEKLY AND MONTHLY TARGET CALCULATIONS ---
   const targets = useMemo(() => {
     const today = new Date();
-    const startOfWeek = new Date("2026-07-09T00:00:00");
-    const endOfWeek = new Date("2026-07-16T23:59:59.999");
     
     // Start of current month
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -288,11 +328,8 @@ export default function DashboardView({
       : weeklyGoal(selectedSupervisor);
     const isQuantitativeGoal = selectedSupervisorId !== "all" && selectedSupervisor?.tipoMeta === "quantitativa";
 
-    // Filter inspections for this week and month (considering selected supervisor)
-    const weekInspections = filteredInspections.filter((i) => {
-      const iDate = new Date(i.data + "T00:00:00");
-      return iDate >= startOfWeek && iDate <= endOfWeek;
-    });
+    // Use centralized weeklyInspections
+    const weekInspections = weeklyInspections;
 
     const monthInspections = filteredInspections.filter((i) => {
       const iDate = new Date(i.data + "T00:00:00");
@@ -427,10 +464,7 @@ export default function DashboardView({
       }
 
       // Pendente weekly targets
-      const supWeekInsps = supInsps.filter((i) => {
-        const iDate = new Date(i.data + "T00:00:00");
-        return iDate >= startOfWeek && iDate <= endOfWeek;
-      });
+      const supWeekInsps = weeklyInspections.filter((i) => i.supervisorId === sup.id);
 
       const supDss = supWeekInsps.some((i) => getTipoLancamento(i.atividade, i.tipo) === "DSS");
       const supAr = supWeekInsps.some((i) => getTipoLancamento(i.atividade, i.tipo) === "AR");
@@ -512,19 +546,23 @@ export default function DashboardView({
       monthlyPercentage,
       smartAlerts: smartAlertsList
     };
-  }, [filteredInspections, selectedSupervisorId, supervisors]);
+  }, [weeklyInspections, filteredInspections, selectedSupervisorId, supervisors]);
 
   // --- NEW MEMOS FOR ADVANCED CARDS ---
   const topSupervisorsOfWeek = useMemo(() => {
-    const startOfWeek = new Date("2026-07-09T00:00:00");
-    const endOfWeek = new Date("2026-07-16T23:59:59.999");
+    const getMostRecentInspectionTime = (insps: Inspection[]) => {
+      if (insps.length === 0) return 0;
+      let maxTime = 0;
+      insps.forEach(i => {
+        const t = i.createdAt ? new Date(i.createdAt).getTime() : new Date(`${i.data}T00:00:00`).getTime();
+        if (t > maxTime) maxTime = t;
+      });
+      return maxTime;
+    };
 
     return supervisors
       .map((sup) => {
-        const supWeekInsps = filteredInspections.filter((i) => {
-          const iDate = new Date(i.data + "T00:00:00");
-          return i.supervisorId === sup.id && iDate >= startOfWeek && iDate <= endOfWeek;
-        });
+        const supWeekInsps = weeklyInspections.filter((i) => i.supervisorId === sup.id);
 
         // Count unique types achieved out of the 7
         const dssCount = supWeekInsps.filter((i) => getTipoLancamento(i.atividade, i.tipo) === "DSS").length;
@@ -544,11 +582,16 @@ export default function DashboardView({
           (notificacaoCount >= 1 ? 1 : 0) + 
           (interdicaoCount >= 1 ? 1 : 0);
 
-        const weeklyTarget = sup.metaSemanal ?? 7;
+        // Weekly target
+        const weeklyTarget = sup.metaSemanal ?? (sup.unidade === "VLI" ? 7 : 4);
         const weeklyAchievedCount = sup.tipoMeta === "quantitativa"
           ? Math.min(supWeekInsps.length, weeklyTarget)
           : Math.min(typeBasedAchievedCount, weeklyTarget);
         const percentage = Math.min(100, Math.round((weeklyAchievedCount / weeklyTarget) * 100));
+
+        // Scoring
+        const pontuacao = supWeekInsps.reduce((sum, i) => sum + getInspectionScore(i), 0);
+        const mostRecentTime = getMostRecentInspectionTime(supWeekInsps);
 
         return {
           id: sup.id,
@@ -556,17 +599,29 @@ export default function DashboardView({
           weeklyAchievedCount,
           weeklyTarget,
           percentage,
-          totalInsps: supWeekInsps.length
+          totalInsps: supWeekInsps.length,
+          pontuacao,
+          mostRecentTime
         };
       })
       .sort((a, b) => {
-        if (b.weeklyAchievedCount !== a.weeklyAchievedCount) {
-          return b.weeklyAchievedCount - a.weeklyAchievedCount;
+        // 1. Maior pontuação
+        if (b.pontuacao !== a.pontuacao) {
+          return b.pontuacao - a.pontuacao;
         }
-        return b.totalInsps - a.totalInsps; // tie break by total inspections in the week
+        // 2. Maior percentual da meta
+        if (b.percentage !== a.percentage) {
+          return b.percentage - a.percentage;
+        }
+        // 3. Maior quantidade de inspeções
+        if (b.totalInsps !== a.totalInsps) {
+          return b.totalInsps - a.totalInsps;
+        }
+        // 4. Inspeção mais recente
+        return b.mostRecentTime - a.mostRecentTime;
       })
       .slice(0, 5); // top 5
-  }, [filteredInspections, supervisors]);
+  }, [weeklyInspections, supervisors]);
 
   const pendingOperationalCounts = useMemo(() => {
     const unresolved = filteredInspections.filter((i) => i.status !== InspectionStatus.CONCLUIDO);
@@ -596,14 +651,9 @@ export default function DashboardView({
     const todayStr = getTodayStr();
     
     const today = new Date();
-    const startOfWeek = new Date("2026-07-09T00:00:00");
-    const endOfWeek = new Date("2026-07-16T23:59:59.999");
     
     // Filters matched list for advanced KPIs
-    const weekCount = filteredInspections.filter((i) => {
-      const iDate = new Date(i.data + "T00:00:00");
-      return iDate >= startOfWeek && iDate <= endOfWeek;
-    }).length;
+    const weekCount = weeklyInspections.length;
 
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
@@ -659,7 +709,7 @@ export default function DashboardView({
       topSupervisorName,
       highestScore
     };
-  }, [filteredInspections, supervisors]);
+  }, [weeklyInspections, filteredInspections, supervisors]);
 
   // --- PENDÊNCIAS E VENCIMENTOS PANEL MATH ---
   const { pendingInspections, overdueInspections } = useMemo(() => {
@@ -756,33 +806,48 @@ export default function DashboardView({
     };
   }, [filteredInspections]);
 
-  // --- CHART 5: Evolução Temporal (Por dia/semana do mês) ---
+  // --- CHART 5: Evolução Temporal (Semana Operacional de 7 Dias: Sexta a Quinta) ---
   const chartEvolution = useMemo(() => {
-    // Group last 6 days
-    const dailyData: Record<string, number> = {};
-    const dateLabels: string[] = [];
+    const { start } = activeOperationalWeek;
     
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const str = d.toISOString().split("T")[0];
-      dailyData[str] = 0;
-      // formatted like "05/07"
-      const parts = str.split("-");
-      dateLabels.push(`${parts[2]}/${parts[1]}`);
+    // Generate exactly 7 days starting from 'start' (Friday) through Thursday
+    const days: { data: string; total: number }[] = [];
+    const dailyCounts: Record<string, number> = {};
+    const dateKeys: string[] = []; // YYYY-MM-DD
+    
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i, 12, 0, 0, 0);
+      
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const label = `${day}/${month}`; // e.g. "17/07"
+      
+      const dateKey = `${d.getFullYear()}-${month}-${day}`;
+      
+      days.push({
+        data: label,
+        total: 0
+      });
+      dailyCounts[dateKey] = 0;
+      dateKeys.push(dateKey);
     }
-
-    filteredInspections.forEach((insp) => {
-      if (dailyData[insp.data] !== undefined) {
-        dailyData[insp.data]++;
+    
+    // Group weeklyInspections by inspection date (data attribute)
+    weeklyInspections.forEach((insp) => {
+      if (insp.data && dailyCounts[insp.data] !== undefined) {
+        dailyCounts[insp.data]++;
       }
     });
-
-    return {
-      labels: dateLabels,
-      values: Object.values(dailyData)
-    };
-  }, [filteredInspections]);
+    
+    // Map the counts back to the 7 days array
+    return days.map((day, idx) => {
+      const key = dateKeys[idx];
+      return {
+        ...day,
+        total: dailyCounts[key] || 0
+      };
+    });
+  }, [weeklyInspections, activeOperationalWeek]);
 
   const lastSyncTime = useMemo(() => {
     const now = new Date();
@@ -809,6 +874,15 @@ export default function DashboardView({
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 lg:self-center">
+          {/* Centralized Operational Week Banner */}
+          <div className="bg-blue-50 border border-blue-100 px-4 py-2 rounded-xl flex flex-col items-start text-left shadow-2xs gap-0.5">
+            <span className="text-[9px] uppercase tracking-widest font-black text-[#F58220]">Semana Operacional</span>
+            <div className="flex items-center gap-1.5 text-xs font-extrabold text-[#0B2E59]">
+              <Calendar size={14} />
+              {formatOperationalWeekLabel(activeOperationalWeek)}
+            </div>
+          </div>
+
           {/* Executive Sync and Database Status Panel */}
           <div className="bg-slate-50 border border-slate-200/80 px-3.5 py-2 rounded-xl flex flex-col items-start sm:items-end text-left sm:text-right shadow-2xs gap-1 min-w-[200px]">
             <div className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest leading-none">
@@ -863,7 +937,7 @@ export default function DashboardView({
             >
               <option value="all">Todo o Histórico</option>
               <option value="diario">Inspeções de Hoje (Diário)</option>
-              <option value="semanal">Últimos 7 Dias (Semanal)</option>
+              <option value="semanal">Semana Operacional (Sexta a Quinta)</option>
               <option value="mensal">Últimos 30 Dias (Mensal)</option>
               <option value="personalizado">Período Personalizado</option>
             </select>
@@ -969,7 +1043,7 @@ export default function DashboardView({
             
             {timeframe !== "all" && (
               <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-800 bg-blue-50 border border-blue-100 rounded-full px-2.5 py-1">
-                <span>Período: {timeframe === "diario" ? "Hoje" : timeframe === "semanal" ? "7 dias" : timeframe === "mensal" ? "30 dias" : `Personalizado (${startDate} a ${endDate})`}</span>
+                <span>Período: {timeframe === "diario" ? "Hoje" : timeframe === "semanal" ? `Semana Operacional (${formatOperationalWeekLabel(activeOperationalWeek)})` : timeframe === "mensal" ? "30 dias" : `Personalizado (${startDate} a ${endDate})`}</span>
                 <button onClick={() => setTimeframe("all")} className="text-blue-500 hover:text-blue-850 font-black ml-1 cursor-pointer">×</button>
               </span>
             )}
@@ -1720,36 +1794,63 @@ export default function DashboardView({
         </div>
 
         {/* Inspeções por Tipo (Segmented Donut or modern list blocks) */}
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col h-[280px]">
           <h3 className="text-sm font-bold text-[#0B2E59] mb-4 uppercase tracking-wider flex items-center gap-1.5">
-            <Clock size={16} className="text-[#F58220]" /> Evolução Diária (Últimos 6 Dias)
+            <Clock size={16} className="text-[#F58220]" /> EVOLUÇÃO DIÁRIA DA SEMANA OPERACIONAL
           </h3>
-          <div className="flex flex-col justify-between h-full">
-            <div className="flex items-end justify-between h-36 px-4 pb-2">
-              {chartEvolution.values.map((val, idx) => {
-                const maxVal = Math.max(...chartEvolution.values) || 1;
-                const hPct = (val / maxVal) * 80; // Scale to 80% max height
-                return (
-                  <div key={idx} className="flex flex-col items-center gap-2 group flex-1">
-                    {/* Tooltip on hover */}
-                    <span className="text-[10px] bg-gray-800 text-white rounded px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {val}
-                    </span>
-                    {/* Bar */}
-                    <div
-                      style={{ height: `${Math.max(hPct, 8)}%` }}
-                      className="w-8 bg-[#F58220] hover:bg-[#0B2E59] rounded-t transition-all duration-300"
-                    />
-                    {/* Label */}
-                    <span className="text-[10px] text-gray-500 font-semibold">{chartEvolution.labels[idx]}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="text-[10px] text-gray-400 text-center border-t border-gray-50 pt-3 flex items-center justify-center gap-1">
-              <TrendingUp size={12} className="text-green-500" /> Variação quantitativa temporal de vistorias em campo
-            </p>
+          <div className="flex-1 min-h-0 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={chartEvolution}
+                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F58220" stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor="#F58220" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis 
+                  dataKey="data" 
+                  tick={{ fill: '#6B7280', fontSize: 10, fontWeight: 600 }}
+                  axisLine={{ stroke: '#E5E7EB' }}
+                  tickLine={false}
+                />
+                <YAxis 
+                  tick={{ fill: '#6B7280', fontSize: 10, fontWeight: 600 }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals={false}
+                />
+                <RechartsTooltip
+                  contentStyle={{
+                    backgroundColor: '#1F2937',
+                    borderRadius: '0.375rem',
+                    color: '#fff',
+                    fontSize: '11px',
+                    border: 'none',
+                    fontWeight: 600
+                  }}
+                  itemStyle={{ color: '#fff' }}
+                  labelStyle={{ color: '#9CA3AF' }}
+                />
+                <RechartsArea 
+                  type="monotone" 
+                  dataKey="total" 
+                  stroke="#F58220" 
+                  strokeWidth={2.5}
+                  fillOpacity={1} 
+                  fill="url(#colorTotal)"
+                  dot={{ r: 4, stroke: '#F58220', strokeWidth: 2, fill: '#fff' }}
+                  activeDot={{ r: 6, stroke: '#F58220', strokeWidth: 2, fill: '#F58220' }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
+          <p className="text-[10px] text-gray-400 text-center border-t border-gray-50 pt-3 flex items-center justify-center gap-1 mt-2">
+            <TrendingUp size={12} className="text-green-500" /> Variação quantitativa temporal de vistorias em campo
+          </p>
         </div>
       </div>
 
