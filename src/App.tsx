@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { auth, db } from "./services/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence, browserSessionPersistence, sendPasswordResetEmail, updatePassword } from "firebase/auth";
 import { doc, getDoc, updateDoc as fbUpdateDoc, setDoc as fbSetDoc, serverTimestamp } from "firebase/firestore";
@@ -179,8 +179,17 @@ export default function App() {
     };
   }, []);
 
+  // Debounce ref to manage and throttle dynamic listener synchronization
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Centralized dynamic listener synchronization manager
   useEffect(() => {
+    // Clear any pending sync execution to prevent overlapping/duplicate listeners
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+      syncTimeoutRef.current = null;
+    }
+
     if (!currentUser) {
       dbService.stopSync(true); // Logout: clear cache & cancel listeners
       setIsSyncing(false);
@@ -193,27 +202,30 @@ export default function App() {
       return;
     }
 
-    // visible + online + authenticated
+    // visible + online + authenticated: Set syncing state and schedule synchronization with a 1-second debounce
     setIsSyncing(true);
-    dbService.stopSync(false); // Stop prior tab snapshot handlers to prevent duplicates
 
-    // Preload metadata once in the background to avoid displaying placeholder names or empty selects
-    dbService.preloadMetadata().then(() => {
+    syncTimeoutRef.current = setTimeout(() => {
+      // Ensure any previously active listeners are stopped right before starting new ones to prevent leaks
+      dbService.stopSync(false);
+
+      // Preload metadata (now cached internally to prevent repeating getDocs)
+      dbService.preloadMetadata().then(() => {
+        refreshDatabaseStates();
+      });
+
+      dbService.startSync(currentUser, activeTab);
       refreshDatabaseStates();
-    });
 
-    dbService.startSync(currentUser, activeTab);
-    refreshDatabaseStates();
-
-    // Discrete brief loading feedback
-    const syncTimer = setTimeout(() => {
       setIsSyncing(false);
-    }, 1200);
+    }, 1000);
 
     return () => {
-      clearTimeout(syncTimer);
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
     };
-  }, [currentUser, activeTab, isVisible, isOnline]);
+  }, [currentUser?.id, activeTab, isVisible, isOnline]);
 
   // Firebase Authentication is the only session source. Firestore listeners start
   // only after authentication, avoiding permission errors on the login screen.

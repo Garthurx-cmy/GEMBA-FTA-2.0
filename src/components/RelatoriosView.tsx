@@ -123,6 +123,7 @@ export default function RelatoriosView({
 
     let active = true;
     const fetchFiltered = async () => {
+      if (document.visibilityState !== "visible") return;
       setLoadingFilters(true);
       try {
         const result = await dbService.getPaginatedInspections({

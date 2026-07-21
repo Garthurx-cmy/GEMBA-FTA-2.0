@@ -174,6 +174,7 @@ export default function HistoricoView({
   useEffect(() => {
     let active = true;
     const fetchData = async () => {
+      if (document.visibilityState !== "visible") return;
       setLoading(true);
       try {
         const startAfterId = docHistory[currentPage - 1] || null;

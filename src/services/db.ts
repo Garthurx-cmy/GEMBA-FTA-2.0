@@ -13,11 +13,80 @@ import {
   setDoc as fbSetDoc,
   updateDoc as fbUpdateDoc,
   deleteDoc as fbDeleteDoc,
-  onSnapshot,
-  serverTimestamp, getDocs, query, where,
+  onSnapshot as fbOnSnapshot,
+  serverTimestamp, getDocs as fbGetDocs, query, where,
   writeBatch as fbWriteBatch,
-  orderBy, limit, startAfter, getDoc
+  orderBy, limit, startAfter, getDoc as fbGetDoc
 } from "firebase/firestore";
+
+// Instrumenting Read operations
+const getDoc = async (ref: any): Promise<any> => {
+  const path = ref && typeof ref.path === "string" ? ref.path : "unknown-path";
+  const horario = new Date().toISOString();
+  console.trace("[FIRESTORE READ]", {
+    operacao: "getDoc",
+    colecao: path,
+    origem: "DBService",
+    horario,
+    motivo: "Busca de documento único",
+    componente: "DBService"
+  });
+  return fbGetDoc(ref);
+};
+
+const getDocs = async (ref: any): Promise<any> => {
+  let path = "unknown-path";
+  if (ref) {
+    if (typeof ref.path === "string") {
+      path = ref.path;
+    } else if (ref._query && ref._query.path) {
+      path = ref._query.path.toString();
+    }
+  }
+  const horario = new Date().toISOString();
+  console.trace("[FIRESTORE READ]", {
+    operacao: "getDocs",
+    colecao: path,
+    origem: "DBService",
+    horario,
+    motivo: "Busca de coleção / consulta",
+    componente: "DBService"
+  });
+  return fbGetDocs(ref);
+};
+
+const onSnapshot = (ref: any, ...args: any[]) => {
+  let path = "unknown-path";
+  if (ref) {
+    if (typeof ref.path === "string") {
+      path = ref.path;
+    } else if (ref._query && ref._query.path) {
+      path = ref._query.path.toString();
+    }
+  }
+  const horario = new Date().toISOString();
+  console.trace("[FIRESTORE READ - LISTENER CREATED]", {
+    operacao: "onSnapshot",
+    colecao: path,
+    origem: "DBService",
+    horario,
+    motivo: "Sincronização em tempo real",
+    componente: "DBService"
+  });
+
+  const unsubscribe = (fbOnSnapshot as any)(ref, ...args);
+
+  return () => {
+    console.trace("[FIRESTORE READ - LISTENER CLOSED]", {
+      operacao: "unsubscribe",
+      colecao: path,
+      origem: "DBService",
+      horario: new Date().toISOString(),
+      componente: "DBService"
+    });
+    unsubscribe();
+  };
+};
 
 // Trace helper for writes in development
 const setDoc = async (ref: any, data: any, options?: any) => {
@@ -87,6 +156,7 @@ class DBService {
   private authorizedEmails: AuthorizedEmail[] = [];
   private syncActive = false;
   private unsubscribers: Array<() => void> = [];
+  private metadataPreloaded = false;
 
   private convert(value: any): any {
     if (Array.isArray(value)) return value.map(v => this.convert(v));
@@ -192,6 +262,7 @@ class DBService {
       this.users = [];
       this.notifications = [];
       this.authorizedEmails = [];
+      this.metadataPreloaded = false;
     }
   }
 
@@ -337,6 +408,8 @@ class DBService {
 
   async preloadMetadata(): Promise<void> {
     if (!hasFirebase || !db) return;
+    if (this.metadataPreloaded) return;
+    this.metadataPreloaded = true;
     try {
       // 1. Preload settings once
       const configSnap = await getDoc(doc(db, "settings", "config"));
@@ -372,6 +445,7 @@ class DBService {
       }
     } catch (err) {
       console.warn("Falha ao pré-carregar metadados em segundo plano:", err);
+      this.metadataPreloaded = false; // reset in case of error so it can retry
     }
   }
 
